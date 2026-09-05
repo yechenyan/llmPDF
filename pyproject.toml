@@ -8,6 +8,24 @@ version = "0.7.0"
 description = "Task-oriented PDF conversion and review toolkit"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
+license = "LicenseRef-llmPDF-Limited-Use-1.0"
+license-files = ["LICENSE"]
+authors = [
+  { name = "yechenyan", email = "ccyechenyan@gmail.com" },
+]
+keywords = ["pdf", "markdown", "docling", "document-processing", "llm"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Text Processing :: Markup",
+]
 dependencies = [
   "docling>=2.123,<2.124",
   "pdfplumber>=0.11,<0.12",
@@ -31,6 +49,11 @@ dev = [
 [project.scripts]
 llmpdf = "llmpdf.cli:main"
 llmpdf-table = "llmpdf.table.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/yechenyan/llmPDF"
+Repository = "https://github.com/yechenyan/llmPDF"
+Issues = "https://github.com/yechenyan/llmPDF/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

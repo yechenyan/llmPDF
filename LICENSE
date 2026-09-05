@@ -1,0 +1,103 @@
+llmPDF Limited Use License 1.0
+
+Copyright (c) 2026 yechenyan. All rights reserved.
+
+1. Definitions
+
+"Software" means the llmPDF software distributed with this license, including
+its source code, object code, documentation, and original assets.
+
+"Unmodified Copy" means a complete copy of the Software whose contents have
+not been altered. Ordinary installation, execution, configuration through
+documented options, creation of bytecode or caches, and use through documented
+command-line or programming interfaces do not make a copy modified.
+
+2. License Grant
+
+Subject to this license, the copyright holder grants you a worldwide,
+royalty-free, non-exclusive license to:
+
+a. install, execute, and use Unmodified Copies for any purpose, including
+   commercial purposes;
+
+b. integrate an Unmodified Copy with other software through the Software's
+   documented command-line and programming interfaces; and
+
+c. reproduce and redistribute Unmodified Copies, either separately or together
+   with other software, provided that you comply with Section 3.
+
+3. Attribution and Notices
+
+Every redistributed copy must include this license and all copyright,
+attribution, and proprietary notices supplied with the Software.
+
+Any product, distribution, documentation, credits page, or other materials that
+accompany a redistributed copy must display the following notice in a
+reasonably prominent manner:
+
+    This product includes llmPDF, Copyright (c) 2026 yechenyan,
+    used under the llmPDF Limited Use License 1.0.
+
+If the distribution has no documentation or credits page, the notice must be
+provided in another reasonably prominent location accompanying the Software.
+
+4. Restrictions
+
+Except where applicable law expressly permits and does not allow the
+restriction to be waived, you may not:
+
+a. modify, adapt, translate, transform, or create derivative works of the
+   Software;
+
+b. distribute or make available a modified version or derivative work of the
+   Software;
+
+c. remove, obscure, or alter any copyright, attribution, license, or
+   proprietary notice;
+
+d. sublicense the Software or grant rights in it beyond those provided by this
+   license; or
+
+e. use the names, logos, or trademarks of llmPDF or the copyright holder to
+   imply endorsement, sponsorship, or affiliation.
+
+5. Ownership
+
+The Software is licensed, not sold. The copyright holder retains all rights,
+title, and interest in the Software except for the limited permissions expressly
+granted by this license. No patent or trademark rights are granted.
+
+6. Third-Party Components
+
+Third-party software and assets included with or required by the Software are
+licensed under their respective terms. This license applies only to the rights
+held by the llmPDF copyright holder and does not replace or limit any
+third-party license.
+
+7. Termination
+
+Your rights under this license terminate automatically if you breach its terms.
+Upon termination, you must stop using and redistributing the Software and
+destroy copies in your possession or control, except where retention is required
+by law. The copyright holder may reinstate your rights in writing.
+
+8. Disclaimer of Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, TITLE, AND NON-INFRINGEMENT. YOU BEAR ALL RISK ARISING FROM USE OF THE
+SOFTWARE.
+
+9. Limitation of Liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE COPYRIGHT HOLDER WILL NOT BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, CONSEQUENTIAL, OR
+OTHER DAMAGES ARISING FROM OR RELATED TO THE SOFTWARE OR THIS LICENSE, EVEN IF
+ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+10. Severability
+
+If any provision of this license is held unenforceable, it will be limited or
+removed only to the minimum extent necessary, and the remaining provisions will
+remain in effect.
+

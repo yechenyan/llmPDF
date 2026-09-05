@@ -446,3 +446,10 @@ uv run llmpdf convert input.pdf \
   --batch-id existing-batch \
   --force
 ```
+
+## License
+
+llmPDF is distributed under the [llmPDF Limited Use License 1.0](LICENSE).
+Unmodified copies may be used for any purpose, including commercial use, and
+may be redistributed with other software when the required attribution is
+provided. Modification, adaptation, and derivative works are not permitted.
