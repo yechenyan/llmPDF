@@ -44,6 +44,9 @@ button:disabled { cursor: default; opacity: .45; }
 .pdf-source-list { padding-top: 6px; }
 .pdf-source { display: flex; width: 100%; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 4px; padding: 11px 10px; color: #dce7e1; text-align: left; border: 0; border-radius: 8px; background: transparent; }
 .pdf-source:hover { background: #20372d; }
+.pdf-source.last-viewed { color: #fff; background: #28513f; box-shadow: inset 4px 0 #8ce0b7, inset 0 0 0 1px rgba(140, 224, 183, .2); }
+.pdf-source.last-viewed:hover { background: #2e5d48; }
+.pdf-source.last-viewed .pdf-source-copy small, .pdf-source.last-viewed .pdf-source-progress { color: #c8dfd3; }
 .pdf-source-copy { min-width: 0; flex: 1; }
 .pdf-source-copy strong, .pdf-source-copy small { display: block; }
 .pdf-source-copy strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }

@@ -159,6 +159,7 @@ function rotatedBBox(region: BBox, rotation: number, pageWidth: number, pageHeig
 function Sidebar({
   catalog,
   selected,
+  lastViewedSourceId,
   reviewSourceId,
   viewMode,
   collapsed,
@@ -172,6 +173,7 @@ function Sidebar({
 }: {
   catalog: Catalog;
   selected?: string;
+  lastViewedSourceId?: string;
   reviewSourceId?: string;
   viewMode: ViewMode;
   collapsed: boolean;
@@ -187,6 +189,7 @@ function Sidebar({
   const [sourceFilter, setSourceFilter] = useState("");
   const [tableFilter, setTableFilter] = useState("");
   const [onlyPending, setOnlyPending] = useState(false);
+  const lastViewedSource = useRef<HTMLButtonElement>(null);
   const isBatch = catalog.source_count > 1;
   const activeReviewSourceId = isBatch ? reviewSourceId : catalog.sources[0]?.id;
   const selectedReviewSourceId = selected?.split(":", 1)[0];
@@ -207,6 +210,10 @@ function Sidebar({
     : selectedSource?.application_state === "needs_reapply"
       ? t("applicationStale")
       : t("applicationNever");
+  useEffect(() => {
+    if (!isBatch || activeReviewSourceId || !lastViewedSourceId) return;
+    lastViewedSource.current?.scrollIntoView({ block: "center" });
+  }, [activeReviewSourceId, isBatch, lastViewedSourceId]);
   return (
     <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
       <button className="sidebar-toggle" title={t(collapsed ? "showSidebar" : "hideSidebar")} aria-label={t(collapsed ? "showSidebar" : "hideSidebar")} onClick={onToggleCollapsed}>{collapsed ? "›" : "‹"}</button>
@@ -248,8 +255,10 @@ function Sidebar({
       {viewMode === "review" ? <div className="source-list">
         {isBatch && !activeReviewSourceId ? <div className="pdf-source-list">
           {visibleSources.map((source) => <button
-            className="pdf-source"
+            className={`pdf-source ${source.id === lastViewedSourceId ? "last-viewed" : ""}`}
             key={source.id}
+            ref={source.id === lastViewedSourceId ? lastViewedSource : undefined}
+            aria-current={source.id === lastViewedSourceId ? "true" : undefined}
             onClick={() => onOpenReviewSource(source.id)}
           >
             <span className="pdf-source-copy">
@@ -833,6 +842,7 @@ function ReviewApp() {
   const [viewMode, setViewMode] = useState<ViewMode>("review");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [reviewSourceId, setReviewSourceId] = useState<string>();
+  const [lastViewedSourceId, setLastViewedSourceId] = useState<string>();
   const [comparisonSourceId, setComparisonSourceId] = useState<string>();
   const [selection, setSelection] = useState<{ sourceId: string; tableId: string }>();
   const [detail, setDetail] = useState<Detail>();
@@ -933,6 +943,7 @@ function ReviewApp() {
   const openReviewSource = async (sourceId: string) => {
     if (dirty) await save();
     const nextSource = catalog?.sources.find((item) => item.id === sourceId);
+    setLastViewedSourceId(sourceId);
     setReviewSourceId(sourceId);
     setComparisonSourceId(sourceId);
     setSelection((current) => current?.sourceId === sourceId
@@ -990,11 +1001,13 @@ function ReviewApp() {
       <Sidebar
         catalog={catalog}
         selected={selection ? `${selection.sourceId}:${selection.tableId}` : undefined}
+        lastViewedSourceId={lastViewedSourceId}
         reviewSourceId={reviewSourceId}
         viewMode={viewMode}
         collapsed={sidebarCollapsed}
         onSelect={(sourceId, tableId) => {
           setSelection({ sourceId, tableId });
+          setLastViewedSourceId(sourceId);
           setComparisonSourceId(sourceId);
           setViewMode("review");
         }}
