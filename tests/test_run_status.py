@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
-from pdf_to_markdown.io_utils import read_json
-from pdf_to_markdown.models import PipelineConfig, TaskResult
-from pdf_to_markdown.run_status import RunStatusTracker
+from llmpdf.io_utils import read_json
+from llmpdf.models import PipelineConfig, TaskResult
+from llmpdf.run_status import RunStatusTracker
 
 
 def make_config(tmp_path: Path) -> PipelineConfig:

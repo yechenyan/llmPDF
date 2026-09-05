@@ -2,7 +2,7 @@ import threading
 
 import pytest
 
-from pdf_to_markdown.agent_scheduler import PriorityAgentExecutor
+from llmpdf.agent_scheduler import PriorityAgentExecutor
 
 
 def test_scheduler_selects_ready_tasks_by_type_then_fifo() -> None:

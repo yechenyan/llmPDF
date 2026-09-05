@@ -5,8 +5,8 @@ import json
 import time
 from pathlib import Path
 
-import pdf_to_markdown.batch as batch_module
-from pdf_to_markdown.batch import (
+import llmpdf.batch as batch_module
+from llmpdf.batch import (
     BatchJob,
     BatchLogger,
     completed_run,
@@ -14,8 +14,8 @@ from pdf_to_markdown.batch import (
     run_convert_dir,
     run_queue,
 )
-from pdf_to_markdown.cli import build_parser
-from pdf_to_markdown.io_utils import write_json
+from llmpdf.cli import build_parser
+from llmpdf.io_utils import write_json
 
 
 def test_convert_dir_cli_defaults() -> None:

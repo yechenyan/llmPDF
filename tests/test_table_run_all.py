@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from parse_table.run_all import extractor_scripts, run_all
+from llmpdf.table.run_all import extractor_scripts, run_all
 
 
 class RunAllTest(unittest.TestCase):
@@ -28,7 +28,7 @@ class RunAllTest(unittest.TestCase):
                 directory = root / name
                 directory.mkdir()
                 (directory / "extract.py").touch()
-            with patch("parse_table.run_all.subprocess.run") as subprocess_run:
+            with patch("llmpdf.table.run_all.subprocess.run") as subprocess_run:
                 subprocess_run.return_value.returncode = 0
                 returncode = run_all(pdf, root, spatial_check=True)
             self.assertEqual(returncode, 0)

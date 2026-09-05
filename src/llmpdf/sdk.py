@@ -48,7 +48,7 @@ class ConvertOptions:
     table_image_max_patches: int = 30_000
     pdftoppm: str | Path = "pdftoppm"
     pi_executable: PathInput | None = None
-    parse_table_executable: PathInput | None = None
+    table_executable: PathInput | None = None
     keep_sessions: bool = False
     keep_work: bool = False
     show_progress: bool = False
@@ -347,8 +347,8 @@ def build_pipeline_config(options: ConvertOptions) -> tuple[PipelineConfig, str,
             confidence_threshold=options.confidence_threshold,
             pdftoppm=str(options.pdftoppm),
             pi_executable=_explicit_executable(options.pi_executable, "Pi"),
-            parse_table_executable=_explicit_executable(
-                options.parse_table_executable, "parse-table"
+            table_executable=_explicit_executable(
+                options.table_executable, "llmpdf-table"
             ),
             docling_options=dict(options.docling_options),
             document_converter=options.document_converter,

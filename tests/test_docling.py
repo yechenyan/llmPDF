@@ -1,15 +1,15 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-import pdf_to_markdown.docling_task as docling_module
-from pdf_to_markdown.docling_task import (
+import llmpdf.docling_task as docling_module
+from llmpdf.docling_task import (
     DEFAULT_DOCLING_OPTIONS,
     DoclingTask,
     merged_docling_options,
 )
-from pdf_to_markdown.io_utils import read_json
-from pdf_to_markdown.io_utils import write_json
-from pdf_to_markdown.models import PipelineConfig
+from llmpdf.io_utils import read_json
+from llmpdf.io_utils import write_json
+from llmpdf.models import PipelineConfig
 
 
 def test_docling_cache_signature_records_that_ocr_is_disabled(tmp_path: Path) -> None:

@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from parse_table.pi_runtime import find_pi
+from llmpdf.table.pi_runtime import find_pi
 
 if TYPE_CHECKING:
     from .models import PipelineConfig
@@ -70,11 +70,11 @@ def run_preflight(config: PipelineConfig, tasks: Iterable[PipelineTask]) -> None
 
     if (
         "05-extract-tables" in pending
-        and config.parse_table_executable is not None
-        and _executable(config.parse_table_executable) is None
+        and config.table_executable is not None
+        and _executable(config.table_executable) is None
     ):
         raise FileNotFoundError(
-            f"parse-table executable is invalid: {config.parse_table_executable}"
+            f"llmpdf-table executable is invalid: {config.table_executable}"
         )
 
     needs_pi = bool(pending & {"03-detect-tables", "05-extract-tables"}) or (

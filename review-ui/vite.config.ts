@@ -9,7 +9,7 @@ export default defineConfig({
   },
   build: {
     outDir: fileURLToPath(
-      new URL("../src/pdf_to_markdown/review_static", import.meta.url),
+      new URL("../src/llmpdf/review_static", import.meta.url),
     ),
     emptyOutDir: true,
   },

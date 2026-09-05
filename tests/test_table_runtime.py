@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 import yaml
 
-from parse_table.runtime import finalize_table
+from llmpdf.table.runtime import finalize_table
 
 
 class RuntimeTest(unittest.TestCase):
@@ -37,7 +37,7 @@ class RuntimeTest(unittest.TestCase):
     def test_writes_metadata_without_running_spatial_check(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             pdf_path, output_dir = self.make_job(Path(temporary))
-            with patch("parse_table.runtime.inspect_csv") as inspect_csv:
+            with patch("llmpdf.table.runtime.inspect_csv") as inspect_csv:
                 metadata_path = finalize_table(
                     pdf_path=pdf_path,
                     output_dir=output_dir,
@@ -62,7 +62,7 @@ class RuntimeTest(unittest.TestCase):
                 suspects=[],
             )
             result.to_text.return_value = "NO_SPATIAL_ANOMALY"
-            with patch("parse_table.runtime.inspect_csv", return_value=result) as inspect_csv:
+            with patch("llmpdf.table.runtime.inspect_csv", return_value=result) as inspect_csv:
                 with contextlib.redirect_stdout(io.StringIO()):
                     finalize_table(
                         pdf_path=pdf_path,
@@ -84,7 +84,7 @@ class RuntimeTest(unittest.TestCase):
                 skipped_cells=0,
                 suspects=[],
             )
-            with patch("parse_table.runtime.inspect_csv", return_value=result):
+            with patch("llmpdf.table.runtime.inspect_csv", return_value=result):
                 with contextlib.redirect_stdout(io.StringIO()) as stdout:
                     finalize_table(
                         pdf_path=pdf_path,

@@ -64,7 +64,7 @@ class BatchLogger:
         except OSError as error:
             if not self.file_error_reported:
                 print(
-                    f"[pdf-to-markdown] batch log disabled after write error: {error}",
+                    f"[llmpdf] batch log disabled after write error: {error}",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -220,7 +220,7 @@ async def run_job(
     command = [
         sys.executable,
         "-m",
-        "pdf_to_markdown.cli",
+        "llmpdf.cli",
         "run-all",
         "--pdf",
         str(job.pdf),

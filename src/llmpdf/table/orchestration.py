@@ -386,7 +386,7 @@ def run_prepared_jobs(
         planned = prioritize_parse_groups(planned)
 
         # The pipeline scheduler selects by task type at dispatch time. A plain
-        # Executor remains supported for the standalone parse-table command.
+        # Executor remains supported for the standalone llmpdf-table command.
         table_futures: dict[Future, list[PreparedJob]] = {}
         for group, confirmed in planned:
             cross_table = len(group) > 1

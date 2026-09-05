@@ -18,7 +18,7 @@ def create_review_app(project: ReviewProject) -> Any:
             "Review dependencies are missing; run `uv sync --extra review`"
         ) from error
 
-    app = FastAPI(title="PDF Table Review", docs_url=None, redoc_url=None)
+    app = FastAPI(title="llmPDF Review", docs_url=None, redoc_url=None)
 
     @app.get("/api/project")
     def catalog() -> dict[str, Any]:

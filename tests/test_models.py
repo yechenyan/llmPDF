@@ -1,4 +1,4 @@
-from pdf_to_markdown.models import BBox
+from llmpdf.models import BBox
 
 
 def test_bbox_overlap_and_center() -> None:

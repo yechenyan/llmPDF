@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from pdf_to_markdown.models import PipelineConfig
-from pdf_to_markdown.preflight import run_preflight
+from llmpdf.models import PipelineConfig
+from llmpdf.preflight import run_preflight
 
 
 class FakeTask:

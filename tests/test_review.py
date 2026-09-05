@@ -1,12 +1,12 @@
 from pathlib import Path
 
-from pdf_to_markdown.io_utils import (
+from llmpdf.io_utils import (
     read_json,
     relative_reference,
     sha256_file,
     write_json,
 )
-from pdf_to_markdown.review import (
+from llmpdf.review import (
     ReviewProject,
     ReviewSource,
     markdown_table_rows,

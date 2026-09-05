@@ -131,7 +131,7 @@ def command_inspect(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="parse-table")
+    parser = argparse.ArgumentParser(prog="llmpdf-table")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     prepare_parser = subparsers.add_parser("prepare", help="Prepare one PDF page and its prompt")

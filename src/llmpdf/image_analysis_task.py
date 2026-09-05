@@ -13,9 +13,9 @@ import pdfplumber
 from PIL import Image, ImageDraw, ImageFont
 from pypdf import PdfReader, PdfWriter
 
-from parse_table.agent_runner import parse_log
-from parse_table.io_utils import normalize_jsonl_paths
-from parse_table.prepare import bounded_render_plan, image_patch_count
+from llmpdf.table.agent_runner import parse_log
+from llmpdf.table.io_utils import normalize_jsonl_paths
+from llmpdf.table.prepare import bounded_render_plan, image_patch_count
 
 from .io_utils import (
     read_json,

@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from parse_table.models import ExtractionJob, PreparedJob
-from parse_table.runner import (
+from llmpdf.table.models import ExtractionJob, PreparedJob
+from llmpdf.table.runner import (
     PiConfig,
     confirmed_group_attachments,
     content_text,
@@ -141,7 +141,7 @@ class RunnerTest(unittest.TestCase):
             return {"status": "completed"}
 
         with (
-            patch("parse_table.orchestration.run_prepared_chain", fake_chain),
+            patch("llmpdf.table.orchestration.run_prepared_chain", fake_chain),
             ThreadPoolExecutor(max_workers=2) as executor,
         ):
             results = run_prepared_jobs(

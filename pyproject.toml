@@ -3,9 +3,9 @@ requires = ["setuptools>=77,<85"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pdf-to-markdown-pipeline"
+name = "llmPDF"
 version = "0.7.0"
-description = "Task-oriented Docling and Pi PDF-to-Markdown pipeline"
+description = "Task-oriented PDF conversion and review toolkit"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
 dependencies = [
@@ -29,14 +29,14 @@ dev = [
 ]
 
 [project.scripts]
-pdf-to-markdown = "pdf_to_markdown.cli:main"
-parse-table = "parse_table.cli:main"
+llmpdf = "llmpdf.cli:main"
+llmpdf-table = "llmpdf.table.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-pdf_to_markdown = ["review_static/**/*"]
+llmpdf = ["review_static/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

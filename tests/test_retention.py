@@ -1,9 +1,9 @@
 import gzip
 from pathlib import Path
 
-from pdf_to_markdown.io_utils import read_json, write_json
-from pdf_to_markdown.models import PipelineConfig
-from pdf_to_markdown.retention import minimize_successful_result, restore_run_blocks
+from llmpdf.io_utils import read_json, write_json
+from llmpdf.models import PipelineConfig
+from llmpdf.retention import minimize_successful_result, restore_run_blocks
 
 
 def make_successful_result(tmp_path: Path) -> PipelineConfig:

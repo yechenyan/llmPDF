@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from pdf_to_markdown import pipeline
-from pdf_to_markdown.io_utils import read_json
-from pdf_to_markdown.models import PipelineConfig, TaskResult
+from llmpdf import pipeline
+from llmpdf.io_utils import read_json
+from llmpdf.models import PipelineConfig, TaskResult
 
 
 class FakeTask:

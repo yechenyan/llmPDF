@@ -84,9 +84,10 @@ def add_runtime_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--pdftoppm", default="pdftoppm")
     parser.add_argument("--pi-executable", type=Path)
     parser.add_argument(
-        "--parse-table-executable",
+        "--llmpdf-table-executable",
+        dest="table_executable",
         type=Path,
-        help="Deprecated compatibility override for an external parse-table executable",
+        help="Deprecated compatibility override for an external llmpdf-table executable",
     )
     parser.add_argument(
         "--docling-options-file",
@@ -178,8 +179,8 @@ def config_from_args(args: argparse.Namespace) -> PipelineConfig:
         confidence_threshold=args.confidence_threshold,
         pdftoppm=args.pdftoppm,
         pi_executable=args.pi_executable.resolve() if args.pi_executable else None,
-        parse_table_executable=args.parse_table_executable.resolve()
-        if args.parse_table_executable
+        table_executable=args.table_executable.resolve()
+        if args.table_executable
         else None,
         docling_options=load_docling_options(args.docling_options_file),
         keep_sessions=args.keep_sessions,
@@ -215,7 +216,7 @@ def options_from_args(args: argparse.Namespace) -> ConvertOptions:
         docling_options=load_docling_options(args.docling_options_file),
         pdftoppm=args.pdftoppm,
         pi_executable=args.pi_executable,
-        parse_table_executable=args.parse_table_executable,
+        table_executable=args.table_executable,
         keep_sessions=args.keep_sessions,
         keep_work=args.keep_work,
         show_progress=True,
@@ -231,7 +232,7 @@ def options_from_args(args: argparse.Namespace) -> ConvertOptions:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="pdf-to-markdown")
+    parser = argparse.ArgumentParser(prog="llmpdf")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     convert_parser = subparsers.add_parser(
@@ -261,7 +262,7 @@ def build_parser() -> argparse.ArgumentParser:
     task_parser.add_argument("task", choices=[task.name for task in TASKS])
     subparsers.add_parser("list-tasks", help="List task names and dependencies")
     review_parser = subparsers.add_parser(
-        "review", help="Open the local PDF table review web application"
+        "review", help="Open the local llmPDF review web application"
     )
     review_parser.add_argument(
         "--result",

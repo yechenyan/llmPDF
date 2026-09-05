@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from pdf_to_markdown.io_utils import read_json, write_json
-from pdf_to_markdown.models import PipelineConfig
-from pdf_to_markdown.validate_task import ValidateTask
+from llmpdf.io_utils import read_json, write_json
+from llmpdf.models import PipelineConfig
+from llmpdf.validate_task import ValidateTask
 
 
 def test_missing_optional_lineage_reference_is_a_warning(tmp_path: Path) -> None:

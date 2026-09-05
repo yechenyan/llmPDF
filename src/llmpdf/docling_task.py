@@ -168,7 +168,7 @@ class DoclingTask(PipelineTask):
             },
         )
         completed = subprocess.run(
-            [sys.executable, "-m", "pdf_to_markdown.docling_worker", str(request_path)],
+            [sys.executable, "-m", "llmpdf.docling_worker", str(request_path)],
             check=False,
         )
         request_path.unlink(missing_ok=True)

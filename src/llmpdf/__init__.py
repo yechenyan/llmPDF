@@ -1,9 +1,9 @@
-"""Task-oriented PDF to Markdown conversion pipeline."""
+"""Task-oriented llmPDF conversion pipeline."""
 
 from importlib.metadata import PackageNotFoundError, version
 
 try:
-    __version__ = version("pdf-to-markdown-pipeline")
+    __version__ = version("llmPDF")
 except PackageNotFoundError:  # Running directly from an unpacked source tree.
     __version__ = "0+unknown"
 

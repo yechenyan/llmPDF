@@ -1,6 +1,6 @@
 import unittest
 
-from parse_table.table_guard import compact_preview, normalized, reason_for_difference
+from llmpdf.table.table_guard import compact_preview, normalized, reason_for_difference
 
 
 class TableGuardTest(unittest.TestCase):

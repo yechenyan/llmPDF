@@ -1,9 +1,9 @@
-from pdf_to_markdown.merge_rules import (
+from llmpdf.merge_rules import (
     find_image_absorbed_blocks,
     find_table_absorbed_blocks,
     is_protected_block,
 )
-from pdf_to_markdown.models import BBox, DocumentBlock
+from llmpdf.models import BBox, DocumentBlock
 
 
 def block(identifier: str, kind: str, bbox: BBox) -> DocumentBlock:

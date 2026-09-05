@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from parse_table.models import ExtractionJob
+from llmpdf.table.models import ExtractionJob
 
 
 class ExtractionJobTest(unittest.TestCase):

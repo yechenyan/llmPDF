@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from parse_table.io_utils import normalize_jsonl_paths
-from pdf_to_markdown import io_utils
+from llmpdf.table.io_utils import normalize_jsonl_paths
+from llmpdf import io_utils
 
 
 def test_write_json_replaces_destination_atomically(tmp_path: Path) -> None:

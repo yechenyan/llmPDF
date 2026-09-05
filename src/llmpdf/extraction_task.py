@@ -9,10 +9,10 @@ from collections.abc import Callable
 from concurrent.futures import as_completed
 from pathlib import Path
 
-from parse_table import WORKFLOW_VERSION as TABLE_ENGINE_VERSION
-from parse_table.models import ExtractionJob
-from parse_table.prepare import prepare_job
-from parse_table.runner import PiConfig, run_prepared_jobs
+from llmpdf.table import WORKFLOW_VERSION as TABLE_ENGINE_VERSION
+from llmpdf.table.models import ExtractionJob
+from llmpdf.table.prepare import prepare_job
+from llmpdf.table.runner import PiConfig, run_prepared_jobs
 
 from .image_analysis_task import prepare_image_jobs, run_prepared_image_job
 from .io_utils import (
@@ -32,10 +32,10 @@ TABLE_EXTRACTION_TARGET = (
 )
 
 
-def find_parse_table(explicit: Path | None = None) -> Path:
-    """Resolve the optional legacy external parse-table override.
+def find_table_executable(explicit: Path | None = None) -> Path:
+    """Resolve the optional legacy external llmpdf-table override.
 
-    Normal pipeline execution uses the bundled ``parse_table`` package and
+    Normal pipeline execution uses the bundled ``llmpdf.table`` package and
     never calls this function.
     """
     candidates: list[Path] = []
@@ -43,16 +43,16 @@ def find_parse_table(explicit: Path | None = None) -> Path:
         resolved = explicit.resolve()
         if not resolved.is_file() or not os.access(resolved, os.X_OK):
             raise FileNotFoundError(
-                f"configured parse-table executable is invalid: {resolved}"
+                f"configured llmpdf-table executable is invalid: {resolved}"
             )
         return resolved
-    configured = os.environ.get("PARSE_TABLE_EXECUTABLE")
+    configured = os.environ.get("LLMPDF_TABLE_EXECUTABLE")
     if configured:
         resolved = Path(configured).expanduser().resolve()
         if not resolved.is_file() or not os.access(resolved, os.X_OK):
-            raise FileNotFoundError(f"PARSE_TABLE_EXECUTABLE is invalid: {resolved}")
+            raise FileNotFoundError(f"LLMPDF_TABLE_EXECUTABLE is invalid: {resolved}")
         return resolved
-    found = shutil.which("parse-table")
+    found = shutil.which("llmpdf-table")
     if found:
         candidates.append(Path(found))
     for candidate in candidates:
@@ -61,18 +61,18 @@ def find_parse_table(explicit: Path | None = None) -> Path:
             return resolved
     searched = ", ".join(str(path) for path in candidates) or "PATH"
     raise FileNotFoundError(
-        f"legacy parse-table executable was not found; searched: {searched}"
+        f"legacy llmpdf-table executable was not found; searched: {searched}"
     )
 
 
-def run_bundled_parse_table(
+def run_bundled_table(
     jobs: list[dict],
     runs: Path,
     config: PipelineConfig,
     trailing_jobs: list[tuple[str, Callable[[], object]]] | None = None,
 ) -> dict:
     if config.early_table_futures is not None:
-        return collect_early_parse_table(jobs, runs, config, trailing_jobs)
+        return collect_early_table(jobs, runs, config, trailing_jobs)
     prepared = [
         prepare_job(
             ExtractionJob.from_dict(job, config.output_dir),
@@ -108,7 +108,7 @@ def run_bundled_parse_table(
     return results
 
 
-def collect_early_parse_table(
+def collect_early_table(
     jobs: list[dict],
     runs: Path,
     config: PipelineConfig,
@@ -150,7 +150,7 @@ def collect_early_parse_table(
     return results
 
 
-def run_legacy_parse_table(
+def run_external_table(
     executable: Path, jobs_file: Path, runs: Path, config: PipelineConfig
 ) -> dict:
     jobs = read_json(jobs_file)
@@ -163,7 +163,7 @@ def run_legacy_parse_table(
         )
         runtime_jobs.append(value)
     with tempfile.TemporaryDirectory(
-        prefix="pdf-to-markdown-legacy-jobs-"
+        prefix="llmpdf-legacy-jobs-"
     ) as directory:
         runtime_jobs_file = Path(directory) / "jobs.json"
         write_json(runtime_jobs_file, runtime_jobs)
@@ -189,7 +189,7 @@ def run_legacy_parse_table(
             command.extend(["--pi-executable", str(config.pi_executable)])
         completed = subprocess.run(command, text=True, capture_output=True, check=False)
     if completed.returncode:
-        raise RuntimeError(f"parse-table batch failed: {completed.stderr.strip()}")
+        raise RuntimeError(f"llmpdf-table batch failed: {completed.stderr.strip()}")
     summary = runs / "run_summary.json"
     return read_json(summary) if summary.is_file() else {}
 
@@ -274,7 +274,7 @@ class ExtractTablesTask(PipelineTask):
         if (
             config.queue_images_with_tables
             and config.analyze_images
-            and not config.parse_table_executable
+            and not config.table_executable
         ):
             prepared_images = prepare_image_jobs(config, use_table_assets=False)
             config.prepared_image_jobs = prepared_images
@@ -306,13 +306,13 @@ class ExtractTablesTask(PipelineTask):
                 self.name, "completed", [relativize(summary, config.output_dir)], {}
             )
 
-        if config.parse_table_executable:
-            results = run_legacy_parse_table(
-                find_parse_table(config.parse_table_executable), jobs_file, runs, config
+        if config.table_executable:
+            results = run_external_table(
+                find_table_executable(config.table_executable), jobs_file, runs, config
             )
             mode = "legacy-external"
         else:
-            results = run_bundled_parse_table(
+            results = run_bundled_table(
                 jobs, runs, config, trailing_jobs=trailing_jobs
             )
             mode = "bundled"

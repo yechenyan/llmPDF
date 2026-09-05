@@ -91,7 +91,7 @@ class PipelineConfig:
     confidence_threshold: float = 0.35
     pdftoppm: str = "pdftoppm"
     pi_executable: Path | None = None
-    parse_table_executable: Path | None = None
+    table_executable: Path | None = None
     docling_options: dict[str, Any] = field(default_factory=dict)
     document_converter: Any | None = None
     document_converter_cache_key: str | None = None

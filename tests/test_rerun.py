@@ -1,9 +1,9 @@
 import gzip
 from pathlib import Path
 
-from pdf_to_markdown import rerun as rerun_module
-from pdf_to_markdown.io_utils import read_json, sha256_file, write_json
-from pdf_to_markdown.models import TaskResult
+from llmpdf import rerun as rerun_module
+from llmpdf.io_utils import read_json, sha256_file, write_json
+from llmpdf.models import TaskResult
 
 
 def test_rerun_tables_restores_minimal_context_and_preserves_other_usage(

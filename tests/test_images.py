@@ -1,5 +1,5 @@
-from pdf_to_markdown.images_task import caption_for_picture, is_repeated_header_image
-from pdf_to_markdown.models import BBox, DocumentBlock
+from llmpdf.images_task import caption_for_picture, is_repeated_header_image
+from llmpdf.models import BBox, DocumentBlock
 
 
 def picture(identifier: str, page: int, order: int, bbox: BBox) -> DocumentBlock:

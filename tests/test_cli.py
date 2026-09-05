@@ -3,15 +3,15 @@ from pathlib import Path
 
 import pytest
 
-from pdf_to_markdown.cli import (
+from llmpdf.cli import (
     build_parser,
     config_from_args,
     options_from_args,
     print_failure,
 )
-from pdf_to_markdown.io_utils import write_json
-from pdf_to_markdown.models import PipelineConfig
-from pdf_to_markdown.sdk import build_pipeline_config
+from llmpdf.io_utils import write_json
+from llmpdf.models import PipelineConfig
+from llmpdf.sdk import build_pipeline_config
 
 
 def test_default_table_concurrency_is_five() -> None:

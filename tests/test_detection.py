@@ -8,8 +8,8 @@ from types import SimpleNamespace
 import pytest
 from pypdf import PdfWriter
 
-from pdf_to_markdown.agent_scheduler import PriorityAgentExecutor
-from pdf_to_markdown.detection_task import (
+from llmpdf.agent_scheduler import PriorityAgentExecutor
+from llmpdf.detection_task import (
     DetectTablesTask,
     detection_prompt,
     normalize_image_detection,
@@ -17,9 +17,9 @@ from pdf_to_markdown.detection_task import (
     ready_candidate_groups,
     select_vision_pages,
 )
-from pdf_to_markdown.io_utils import read_json, write_json
-from pdf_to_markdown.models import PipelineConfig
-from pdf_to_markdown.pi_runtime import pi_environment
+from llmpdf.io_utils import read_json, write_json
+from llmpdf.models import PipelineConfig
+from llmpdf.pi_runtime import pi_environment
 
 
 def test_auto_environment_uses_source_settings_directly() -> None:
@@ -212,8 +212,8 @@ def test_find_batches_run_concurrently_and_are_written_in_page_order(
             active -= 1
         return SimpleNamespace(returncode=0, stderr="")
 
-    monkeypatch.setattr("pdf_to_markdown.detection_task.find_pi", lambda: Path("pi"))
-    monkeypatch.setattr("pdf_to_markdown.detection_task.subprocess.run", fake_run)
+    monkeypatch.setattr("llmpdf.detection_task.find_pi", lambda: Path("pi"))
+    monkeypatch.setattr("llmpdf.detection_task.subprocess.run", fake_run)
 
     result = DetectTablesTask().run(config)
     detected = read_json(config.work_dir / "detection" / "table-pages.json")
@@ -299,11 +299,11 @@ def test_completed_find_batch_releases_table_work_before_other_find_finishes(
         table_started.set()
         return {prepared[0].job.id: {"returncode": 0}}
 
-    monkeypatch.setattr("pdf_to_markdown.detection_task.find_pi", lambda: Path("pi"))
-    monkeypatch.setattr("pdf_to_markdown.detection_task.subprocess.run", fake_run)
-    monkeypatch.setattr("parse_table.prepare.prepare_job", fake_prepare)
+    monkeypatch.setattr("llmpdf.detection_task.find_pi", lambda: Path("pi"))
+    monkeypatch.setattr("llmpdf.detection_task.subprocess.run", fake_run)
+    monkeypatch.setattr("llmpdf.table.prepare.prepare_job", fake_prepare)
     monkeypatch.setattr(
-        "parse_table.orchestration.run_dynamic_group", fake_dynamic_group
+        "llmpdf.table.orchestration.run_dynamic_group", fake_dynamic_group
     )
 
     with PriorityAgentExecutor(max_workers=2) as scheduler:

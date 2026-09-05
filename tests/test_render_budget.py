@@ -1,6 +1,6 @@
 import math
 
-from parse_table.prepare import bounded_render_plan, image_patch_count
+from llmpdf.table.prepare import bounded_render_plan, image_patch_count
 
 
 def test_a4_at_240_dpi_stays_at_target_dpi() -> None:

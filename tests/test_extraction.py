@@ -2,14 +2,14 @@ import json
 import subprocess
 from pathlib import Path
 
-from pdf_to_markdown.extraction_task import (
+from llmpdf.extraction_task import (
     TABLE_EXTRACTION_TARGET,
     ExtractTablesTask,
     continuation_groups,
-    run_legacy_parse_table,
+    run_external_table,
 )
-from pdf_to_markdown.io_utils import read_json, write_json
-from pdf_to_markdown.models import PipelineConfig
+from llmpdf.io_utils import read_json, write_json
+from llmpdf.models import PipelineConfig
 
 
 def test_table_extraction_target_is_english_and_handles_empty_pages() -> None:
@@ -71,7 +71,7 @@ def test_default_extraction_uses_bundled_engine(tmp_path: Path, monkeypatch) -> 
         return {}
 
     monkeypatch.setattr(
-        "pdf_to_markdown.extraction_task.run_bundled_parse_table", fake_bundled
+        "llmpdf.extraction_task.run_bundled_table", fake_bundled
     )
     result = ExtractTablesTask().run(config)
 
@@ -102,8 +102,8 @@ def test_legacy_runner_uses_temporary_absolute_paths_only_at_runtime(
         write_json(runs / "run_summary.json", {})
         return subprocess.CompletedProcess(command, 0, "", "")
 
-    monkeypatch.setattr("pdf_to_markdown.extraction_task.subprocess.run", fake_run)
-    run_legacy_parse_table(tmp_path / "parse-table", jobs_file, runs, config)
+    monkeypatch.setattr("llmpdf.extraction_task.subprocess.run", fake_run)
+    run_external_table(tmp_path / "llmpdf-table", jobs_file, runs, config)
 
     assert read_json(jobs_file)[0]["pdf"] == "../input.pdf"
     assert Path(seen_runtime_jobs[0]["pdf"]).is_absolute()

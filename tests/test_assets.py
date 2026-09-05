@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pdf_to_markdown.assets_task import csv_to_markdown, infer_header_rows
+from llmpdf.assets_task import csv_to_markdown, infer_header_rows
 
 
 def test_csv_to_markdown_escapes_cells(tmp_path: Path) -> None:

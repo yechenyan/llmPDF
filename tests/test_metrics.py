@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from pdf_to_markdown.metrics_task import combined_usage, usage_from_pi_log
+from llmpdf.metrics_task import combined_usage, usage_from_pi_log
 
 
 def test_usage_from_pi_log_counts_cached_and_noncached_input(tmp_path: Path) -> None:

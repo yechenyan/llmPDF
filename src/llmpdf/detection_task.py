@@ -9,7 +9,7 @@ from typing import Any
 
 import pdfplumber
 
-from parse_table.io_utils import normalize_jsonl_paths
+from llmpdf.table.io_utils import normalize_jsonl_paths
 
 from .io_utils import read_json, relativize, sha256_file, write_json
 from .models import PipelineConfig, TaskResult
@@ -334,10 +334,10 @@ class DetectTablesTask(PipelineTask):
         def schedule_ready_tables() -> None:
             if not config.dynamic_agent_scheduling:
                 return
-            from parse_table.agent_runner import PiConfig
-            from parse_table.models import ExtractionJob
-            from parse_table.orchestration import run_dynamic_group
-            from parse_table.prepare import prepare_job
+            from llmpdf.table.agent_runner import PiConfig
+            from llmpdf.table.models import ExtractionJob
+            from llmpdf.table.orchestration import run_dynamic_group
+            from llmpdf.table.prepare import prepare_job
 
             from .extraction_task import TABLE_EXTRACTION_TARGET
 

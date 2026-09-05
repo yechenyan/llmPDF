@@ -7,8 +7,8 @@ import pytest
 from PIL import Image
 from pypdf import PdfWriter
 
-from pdf_to_markdown import image_analysis_task
-from pdf_to_markdown.image_analysis_task import (
+from llmpdf import image_analysis_task
+from llmpdf.image_analysis_task import (
     AnalyzeImagesTask,
     _annotate_picture_hints,
     _bounded_attachment,
@@ -18,8 +18,8 @@ from pdf_to_markdown.image_analysis_task import (
     parse_image_response,
     validate_image_response,
 )
-from pdf_to_markdown.io_utils import read_json, write_json
-from pdf_to_markdown.models import PipelineConfig
+from llmpdf.io_utils import read_json, write_json
+from llmpdf.models import PipelineConfig
 
 
 def valid_chart() -> dict:

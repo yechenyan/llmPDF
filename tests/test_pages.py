@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from pdf_to_markdown.pages import effective_pages, parse_pages, validate_pages
+from llmpdf.pages import effective_pages, parse_pages, validate_pages
 
 
 def test_parse_pages_supports_ranges_lists_sorting_and_deduplication() -> None:

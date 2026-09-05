@@ -9,4 +9,4 @@ if TYPE_CHECKING:
 
 def report_progress(config: PipelineConfig, message: str) -> None:
     if config.show_progress:
-        print(f"[pdf-to-markdown] {message}", file=sys.stderr, flush=True)
+        print(f"[llmpdf] {message}", file=sys.stderr, flush=True)

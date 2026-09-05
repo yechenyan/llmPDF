@@ -1,6 +1,6 @@
 # Python SDK
 
-`pdf_to_markdown.convert()` is the main PDF-to-Markdown entry point. The CLI calls the same SDK.
+`llmpdf.convert()` is the main llmPDF entry point. The CLI calls the same SDK.
 
 ## Complete input options
 
@@ -32,7 +32,7 @@ ConvertOptions(
     retain_docling_tables=True,
     pdftoppm="pdftoppm",
     pi_executable=None,
-    parse_table_executable=None,                # Deprecated external-runner compatibility
+    table_executable=None,                # Deprecated external-runner compatibility
     keep_sessions=False,
     keep_work=False,                            # Minimal retention is the default
     show_progress=False,                        # Progress events on stderr
@@ -48,25 +48,25 @@ Docling processes the smallest continuous physical-page range covering the selec
 
 Set `show_progress=True` to write concise stage and job progress to standard error. It defaults to `False` for library use; the CLI enables it automatically.
 
-In the built-in execution mode, all Agent work shares one scheduler with at most `agent_concurrency` workers. Ready tasks are selected by type in this order: Find, cross-page table, ordinary table, then image. Each type is FIFO and selection is repeated whenever a worker becomes free; running lower-priority work is not interrupted. `find_concurrency`, `table_concurrency`, and `image_concurrency` provide per-type limits within the global limit. The deprecated external `parse_table_executable` manages its own table subprocesses and does not use this queue.
+In the built-in execution mode, all Agent work shares one scheduler with at most `agent_concurrency` workers. Ready tasks are selected by type in this order: Find, cross-page table, ordinary table, then image. Each type is FIFO and selection is repeated whenever a worker becomes free; running lower-priority work is not interrupted. `find_concurrency`, `table_concurrency`, and `image_concurrency` provide per-type limits within the global limit. The deprecated external `table_executable` manages its own table subprocesses and does not use this queue.
 
 The scheduler is dynamic: a completed Find batch immediately releases table groups whose left and right physical-page boundaries are known. A group at an unresolved batch boundary stays blocked. Image work is added after detection and uses any remaining slot only when no higher-priority ready task is waiting.
 
 ## Installation with uv
 
 ```bash
-cd /path/to/pdf-to-markdown
+cd /path/to/llmpdf
 uv sync --extra review --group dev --locked
 ```
 
-The table extraction engine is included in this project; no neighboring `parse-table` project is required. `pyproject.toml` declares compatible package ranges, while `uv.lock` pins the complete dependency set used for development, testing, and deployment.
+The table extraction engine is included in this project; no neighboring `llmpdf-table` project is required. `pyproject.toml` declares compatible package ranges, while `uv.lock` pins the complete dependency set used for development, testing, and deployment.
 
 ## Basic usage
 
 ```python
 from pathlib import Path
 
-from pdf_to_markdown import ConvertOptions, convert
+from llmpdf import ConvertOptions, convert
 
 result = convert(
     ConvertOptions(
@@ -141,7 +141,7 @@ Dictionaries merge recursively, scalar values replace defaults, lists replace co
 The CLI accepts the same configuration from a JSON file:
 
 ```bash
-uv run pdf-to-markdown convert /absolute/input.pdf \
+uv run llmpdf convert /absolute/input.pdf \
   --output-dir /absolute/results \
   --docling-options-file /absolute/docling.json
 ```
@@ -162,7 +162,7 @@ Advanced integrations can reuse an existing Docling converter:
 
 ```python
 from docling.document_converter import DocumentConverter
-from pdf_to_markdown import ConvertOptions, convert
+from llmpdf import ConvertOptions, convert
 
 converter = DocumentConverter(...)
 result = convert(
@@ -206,14 +206,14 @@ print(result.billing.actual_openai_charge_usd)  # Usually None with Codex login
 
 Use `result.to_dict()` for a fully JSON-serializable result. Path attributes on `ConversionResult` remain absolute `Path` objects that can be accessed directly. Paths in `to_dict()` and CLI JSON output are POSIX paths relative to the current PDF result directory. The payload therefore contains `path_base: "output_dir"`, `output_dir: "."`, `output_markdown: "output.md"`, and `metadata: "assets/metadata.json"`.
 
-See `uv run pdf-to-markdown convert --help` for all corresponding CLI options. `--docling-options-file` maps to `docling_options`, `--keep-sessions` to `keep_sessions`, `--keep-work` to `keep_work`, `--agent-timeout-seconds` to `agent_timeout_seconds`, and `--retain-docling-tables` to `retain_docling_tables`. `document_converter` and its cache key are SDK-only options.
+See `uv run llmpdf convert --help` for all corresponding CLI options. `--docling-options-file` maps to `docling_options`, `--keep-sessions` to `keep_sessions`, `--keep-work` to `keep_work`, `--agent-timeout-seconds` to `agent_timeout_seconds`, and `--retain-docling-tables` to `retain_docling_tables`. `document_converter` and its cache key are SDK-only options.
 
 ## Regenerating tables from a minimal result
 
 ```python
 from pathlib import Path
 
-from pdf_to_markdown import rerun_tables
+from llmpdf import rerun_tables
 
 summary = rerun_tables(Path("/absolute/path/to/result"))
 print(summary["table_count"], summary["total_tokens"])
@@ -226,7 +226,7 @@ The source PDF must still exist and match the SHA-256 recorded by the original c
 ```python
 from dataclasses import replace
 
-from pdf_to_markdown import ConfigurationError, TaskExecutionError
+from llmpdf import ConfigurationError, TaskExecutionError
 
 try:
     result = convert(options)
@@ -245,7 +245,7 @@ Before conversion starts, preflight validation checks that the PDF is readable, 
 ## Complete example
 
 ```python
-from pdf_to_markdown import ConvertOptions, convert
+from llmpdf import ConvertOptions, convert
 
 result = convert(
     ConvertOptions(

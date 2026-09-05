@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from pdf_to_markdown.io_utils import write_json
-from pdf_to_markdown.models import PipelineConfig, TaskResult
-from pdf_to_markdown.task import PipelineTask
+from llmpdf.io_utils import write_json
+from llmpdf.models import PipelineConfig, TaskResult
+from llmpdf.task import PipelineTask
 
 
 class ExampleTask(PipelineTask):

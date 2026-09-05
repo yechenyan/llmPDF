@@ -2,8 +2,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from pdf_to_markdown.image_analysis_task import _optimize_vision_images
-from pdf_to_markdown.models import PipelineConfig
+from llmpdf.image_analysis_task import _optimize_vision_images
+from llmpdf.models import PipelineConfig
 
 
 def test_large_vision_image_uses_smaller_webp_without_resizing(tmp_path: Path) -> None:

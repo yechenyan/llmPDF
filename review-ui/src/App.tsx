@@ -1031,7 +1031,7 @@ function ReviewApp() {
               </div>
             </div>
             <div className="tab-body">
-              {activeTab === "final" ? <TableGrid rows={rows} editable onChange={editRows} columnWidthKey={`pdf-table-review-widths:${detail.source_id}:${detail.table.id}`} physicalPages={physicalPages} pageWeights={pageWeights} activePhysicalPage={page} onPhysicalPage={setPage} /> : null}
+              {activeTab === "final" ? <TableGrid rows={rows} editable onChange={editRows} columnWidthKey={`llmpdf-review-widths:${detail.source_id}:${detail.table.id}`} physicalPages={physicalPages} pageWeights={pageWeights} activePhysicalPage={page} onPhysicalPage={setPage} /> : null}
               {activeTab === "ai" ? <><div className="source-actions"><span>{t("aiSource")}</span><button onClick={() => useRows(detail.ai_rows, "ai")}>{t("restoreAi")}</button></div><TableGrid rows={detail.ai_rows} physicalPages={physicalPages} pageWeights={pageWeights} activePhysicalPage={page} onPhysicalPage={setPage} /></> : null}
               {activeTab === "docling" ? <>
                 <div className="source-actions"><div className="fragment-tabs"><button className={fragment === "combined" ? "active" : ""} onClick={() => setFragment("combined")}>{t("continuousView")}</button>{detail.docling_fragments.map((item) => <button key={item.id} className={fragment === item.id ? "active" : ""} onClick={() => { setFragment(item.id); setPage(item.page); }}>P{item.page}</button>)}</div><button disabled={!fragmentRows.length} onClick={() => useRows(fragmentRows, "docling")}>{t("useAsFinal")}</button></div>

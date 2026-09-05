@@ -82,7 +82,7 @@ const messages = {
     language: "Sprache",
   },
   en: {
-    documentTitle: "PDF Table Review",
+    documentTitle: "llmPDF Review",
     brand: "Table Review",
     progress: "{{reviewed}} / {{total}} completed",
     tableReview: "Table diff",
@@ -174,11 +174,11 @@ const I18nContext = createContext<I18nValue | undefined>(undefined);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>(() => {
-    const stored = window.localStorage.getItem("pdf-table-review-language");
+    const stored = window.localStorage.getItem("llmpdf-review-language");
     return stored === "de" || stored === "en" ? stored : "de";
   });
   useEffect(() => {
-    window.localStorage.setItem("pdf-table-review-language", language);
+    window.localStorage.setItem("llmpdf-review-language", language);
     document.documentElement.lang = language;
     document.title = messages[language].documentTitle;
   }, [language]);

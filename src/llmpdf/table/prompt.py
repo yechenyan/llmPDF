@@ -130,7 +130,7 @@ Inside `extract.py`:
 
    import pdfplumber
 
-   from parse_table.runtime import run_extractor
+   from llmpdf.table.runtime import run_extractor
 
 
    TABLE_NAME: str | None = None
@@ -192,7 +192,7 @@ with pdfplumber.open(pdf_path) as pdf:
 
 After writing every `extract.py`, run this command exactly once:
 
-{python_path} -m parse_table.run_all --pdf {single_pdf} --output-dir {output_dir} --spatial-check
+{python_path} -m llmpdf.table.run_all --pdf {single_pdf} --output-dir {output_dir} --spatial-check
 '''
     if include_special_advisory_rules:
         prompt += "\n" + build_special_advisory_rules()

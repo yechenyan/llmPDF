@@ -43,7 +43,7 @@ def pi_environment(agent_dir: Path | None = None, transport: str = "auto"):
     source = agent_dir or Path(
         environment.get("PI_CODING_AGENT_DIR", str(Path.home() / ".pi" / "agent"))
     )
-    with tempfile.TemporaryDirectory(prefix="pdf-to-markdown-pi-") as directory:
+    with tempfile.TemporaryDirectory(prefix="llmpdf-pi-") as directory:
         runtime = Path(directory)
         if source.is_dir():
             for item in source.iterdir():

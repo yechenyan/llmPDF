@@ -1,6 +1,6 @@
 import unittest
 
-from parse_table.prompt import (
+from llmpdf.table.prompt import (
     build_confirmed_group_prompt,
     build_continuation_prompt,
     build_extraction_prompt,
@@ -25,9 +25,9 @@ class PromptTest(unittest.TestCase):
         self.assertIn("Avoid calling `crop().extract_text()` inside data-row or data-column loops", prompt)
         self.assertIn("at most 10 calls per logical table", prompt)
         self.assertTrue(prompt.rstrip().endswith("at most 10 calls per logical table."))
-        self.assertIn("from parse_table.runtime import run_extractor", prompt)
+        self.assertIn("from llmpdf.table.runtime import run_extractor", prompt)
         self.assertIn("--spatial-check", prompt)
-        self.assertIn("-m parse_table.run_all", prompt)
+        self.assertIn("-m llmpdf.table.run_all", prompt)
         self.assertIn("Do not separately read the CSV or metadata afterward", prompt)
         self.assertIn("REQUIRES_VISUAL_REVIEW", prompt)
         self.assertIn("Do not generate `metadata.yaml` yourself", prompt)

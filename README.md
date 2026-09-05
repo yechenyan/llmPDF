@@ -1,8 +1,8 @@
-# PDF to Markdown
+# llmPDF
 
 Convert PDFs into Markdown that is suitable for reading, search, and downstream processing. The tool preserves document structure, extracts tables, and can analyze images and charts. A local review UI lets you compare the generated Markdown with the source PDF.
 
-Use `pdf-to-markdown convert` for normal operation. One command runs the complete conversion.
+Use `llmpdf convert` for normal operation. One command runs the complete conversion.
 
 ## Requirements
 
@@ -39,14 +39,14 @@ This installs both the converter and the optional local review UI.
 Verify the installation:
 
 ```bash
-uv run pdf-to-markdown --help
-uv run pdf-to-markdown convert --help
+uv run llmpdf --help
+uv run llmpdf convert --help
 ```
 
 ## Quick start
 
 ```bash
-uv run pdf-to-markdown convert \
+uv run llmpdf convert \
   "/absolute/path/to/input.pdf" \
   --output-dir "/absolute/path/to/results"
 ```
@@ -62,7 +62,7 @@ The default result directory is:
 Set a stable batch name when you need a predictable path or resumable retries:
 
 ```bash
-uv run pdf-to-markdown convert \
+uv run llmpdf convert \
   "/absolute/path/to/input.pdf" \
   --output-dir "/absolute/path/to/results" \
   --batch-id "edis-2024"
@@ -73,7 +73,7 @@ After a failure, rerun with the same PDF, `--output-dir`, and `--batch-id`. Comp
 To process selected pages while retaining their original PDF page numbers:
 
 ```bash
-uv run pdf-to-markdown convert \
+uv run llmpdf convert \
   "/absolute/path/to/input.pdf" \
   --output-dir "/absolute/path/to/results" \
   --pages "1,3,8-12"
@@ -92,7 +92,7 @@ All Agent work uses one dynamic scheduler with at most five workers. Whenever a 
 Syntax:
 
 ```text
-pdf-to-markdown convert PDF --output-dir OUTPUT_DIR [OPTIONS]
+llmpdf convert PDF --output-dir OUTPUT_DIR [OPTIONS]
 ```
 
 ### Input and output
@@ -143,12 +143,12 @@ When an image is a readable chart, the tool attempts to produce structured table
 | `--docling-options-file PATH` | None | JSON file containing additional document-analysis options. |
 | `--keep-sessions` | Disabled | Keep model session files for troubleshooting. |
 | `--keep-work` | Disabled | Keep all intermediate files after success. By default, reproducible work files are removed after metrics and validation are complete. |
-| `--parse-table-executable PATH` | None | Deprecated compatibility option; avoid it in new integrations. |
+| `--llmpdf-table-executable PATH` | None | Deprecated compatibility option; avoid it in new integrations. |
 
 Use the built-in help as the authoritative parameter reference for the installed version:
 
 ```bash
-uv run pdf-to-markdown convert --help
+uv run llmpdf convert --help
 ```
 
 ## Common commands
@@ -158,7 +158,7 @@ uv run pdf-to-markdown convert --help
 Use `convert-dir` to recursively find PDFs and convert them in place:
 
 ```bash
-uv run pdf-to-markdown convert-dir "/absolute/path/to/pdf-root" --jobs 3
+uv run llmpdf convert-dir "/absolute/path/to/pdf-root" --jobs 3
 ```
 
 Each PDF remains beside its generated `output.md`, `assets/`, and `work/` directories. Because these names are shared, in-place mode requires exactly one PDF in each containing directory. Directories containing multiple PDFs are reported as invalid instead of overwriting one result with another.
@@ -168,7 +168,7 @@ The directory command skips a PDF only when all of the following are true: `work
 All PDF workers start immediately. To process up to three PDFs concurrently, run:
 
 ```bash
-uv run pdf-to-markdown convert-dir "/absolute/path/to/pdf-root" \
+uv run llmpdf convert-dir "/absolute/path/to/pdf-root" \
   --jobs 3
 ```
 
@@ -177,13 +177,13 @@ When a running PDF finishes, its slot starts the next queued PDF immediately. St
 Preview the decisions without converting anything:
 
 ```bash
-uv run pdf-to-markdown convert-dir "/absolute/path/to/pdf-root" --dry-run
+uv run llmpdf convert-dir "/absolute/path/to/pdf-root" --dry-run
 ```
 
 Options for each individual conversion can be forwarded after `--`:
 
 ```bash
-uv run pdf-to-markdown convert-dir "/absolute/path/to/pdf-root" \
+uv run llmpdf convert-dir "/absolute/path/to/pdf-root" \
   --jobs 2 -- --no-analyze-images
 ```
 
@@ -206,7 +206,7 @@ The final directory layout is:
 Process text and tables without analyzing images:
 
 ```bash
-uv run pdf-to-markdown convert input.pdf \
+uv run llmpdf convert input.pdf \
   --output-dir results \
   --batch-id text-and-tables \
   --no-analyze-images
@@ -215,7 +215,7 @@ uv run pdf-to-markdown convert input.pdf \
 Reduce concurrency on a resource-constrained machine:
 
 ```bash
-uv run pdf-to-markdown convert input.pdf \
+uv run llmpdf convert input.pdf \
   --output-dir results \
   --batch-id low-load \
   --agent-concurrency 2 \
@@ -239,7 +239,7 @@ For a scanned document, create `docling-options.json` to enable OCR:
 Then run:
 
 ```bash
-uv run pdf-to-markdown convert scanned.pdf \
+uv run llmpdf convert scanned.pdf \
   --output-dir results \
   --batch-id scanned-document \
   --docling-options-file docling-options.json
@@ -320,7 +320,7 @@ Large images created from full-page vision analysis are stored as WebP at their 
 Regenerate table extraction from a successful minimal result:
 
 ```bash
-uv run pdf-to-markdown rerun-tables \
+uv run llmpdf rerun-tables \
   "/absolute/path/to/results/edis-2024/input"
 ```
 
@@ -331,7 +331,7 @@ The command verifies the source PDF against the saved SHA-256, reruns all table 
 Start the local review UI:
 
 ```bash
-uv run --extra review pdf-to-markdown review \
+uv run --extra review llmpdf review \
   --result "/absolute/path/to/results/edis-2024/input"
 ```
 
@@ -340,7 +340,7 @@ The UI opens at `http://127.0.0.1:8765/` by default. Its document-comparison vie
 Load multiple results by repeating `--result`:
 
 ```bash
-uv run --extra review pdf-to-markdown review \
+uv run --extra review llmpdf review \
   --result "/path/to/result-a" \
   --result "/path/to/result-b"
 ```
@@ -348,8 +348,8 @@ uv run --extra review pdf-to-markdown review \
 You can also load a complete batch or a review-project file:
 
 ```bash
-uv run --extra review pdf-to-markdown review --batch "/path/to/batch"
-uv run --extra review pdf-to-markdown review --project review-project.json
+uv run --extra review llmpdf review --batch "/path/to/batch"
+uv run --extra review llmpdf review --project review-project.json
 ```
 
 ### `review` parameters
@@ -363,14 +363,14 @@ uv run --extra review pdf-to-markdown review --project review-project.json
 | `--port N` | `8765` | Listening port. |
 | `--no-open` | Disabled | Start the server without opening a browser. |
 
-The review UI operates on local results and does not make model calls. See [REVIEW.md](REVIEW.md) for detailed instructions.
+The review UI operates on local results and does not make model calls.
 
 ## AI and automation usage
 
 For non-interactive calls, always provide absolute input and output paths and a stable `--batch-id`:
 
 ```bash
-uv run pdf-to-markdown convert \
+uv run llmpdf convert \
   "/data/in/report.pdf" \
   --output-dir "/data/out" \
   --batch-id "report-2026-09-03"
@@ -389,7 +389,7 @@ Calling programs should follow these conventions:
 ```python
 from pathlib import Path
 
-from pdf_to_markdown import ConvertOptions, convert
+from llmpdf import ConvertOptions, convert
 
 result = convert(
     ConvertOptions(
@@ -441,7 +441,7 @@ Run the same command with the same `--batch-id`. A new batch name starts a new c
 Keep the same path and add `--force`:
 
 ```bash
-uv run pdf-to-markdown convert input.pdf \
+uv run llmpdf convert input.pdf \
   --output-dir results \
   --batch-id existing-batch \
   --force

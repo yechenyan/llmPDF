@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from pdf_to_markdown.io_utils import read_json, write_json
-from pdf_to_markdown.merge_task import (
+from llmpdf.io_utils import read_json, write_json
+from llmpdf.merge_task import (
     MergeMarkdownTask,
     build_table_lineage,
     choose_docling_table,
@@ -14,7 +14,7 @@ from pdf_to_markdown.merge_task import (
     public_table_record,
     render_image_markdown,
 )
-from pdf_to_markdown.models import BBox, DocumentBlock, PipelineConfig
+from llmpdf.models import BBox, DocumentBlock, PipelineConfig
 
 
 def block(

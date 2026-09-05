@@ -98,7 +98,7 @@ def run_tasks(
             config.dynamic_agent_scheduling = {
                 "03-detect-tables",
                 "05-extract-tables",
-            }.issubset(selected_names) and not config.parse_table_executable
+            }.issubset(selected_names) and not config.table_executable
             config.queue_images_with_tables = {
                 "05-extract-tables",
                 "07-analyze-images",

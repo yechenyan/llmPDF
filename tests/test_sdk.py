@@ -5,10 +5,10 @@ from pathlib import Path
 import pytest
 from pypdf import PdfWriter
 
-from pdf_to_markdown import sdk
-from pdf_to_markdown.io_utils import write_json
-from pdf_to_markdown.models import TaskResult
-from pdf_to_markdown.sdk import (
+from llmpdf import sdk
+from llmpdf.io_utils import write_json
+from llmpdf.models import TaskResult
+from llmpdf.sdk import (
     ConfigurationError,
     ConvertOptions,
     TaskExecutionError,
