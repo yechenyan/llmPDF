@@ -13,6 +13,7 @@
 }
 
 * { box-sizing: border-box; }
+html, body, #root { overscroll-behavior-x: none; }
 body { margin: 0; min-width: 1080px; min-height: 100vh; overflow: hidden; }
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
@@ -40,15 +41,24 @@ button:disabled { cursor: default; opacity: .45; }
 .filters > input:focus { border-color: #72cba2; }
 .filters label { display: flex; gap: 7px; align-items: center; margin-top: 10px; color: #afbeb7; font-size: 12px; }
 .source-list { flex: 1; overflow: auto; padding: 4px 8px 28px; }
-.comparison-source-list { padding-top: 8px; }
-.comparison-source { display: block; width: 100%; margin-bottom: 4px; padding: 11px 10px; color: #dce7e1; text-align: left; border: 0; background: transparent; }
-.comparison-source:hover { background: #20372d; }
-.comparison-source.selected { color: #fff; background: #28513f; box-shadow: inset 3px 0 #8ce0b7; }
-.comparison-source span, .comparison-source small { display: block; }
-.comparison-source span { overflow: hidden; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.comparison-source small { margin-top: 4px; color: #aebdb6; font-size: 10px; }
+.pdf-source-list { padding-top: 6px; }
+.pdf-source { display: flex; width: 100%; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 4px; padding: 11px 10px; color: #dce7e1; text-align: left; border: 0; border-radius: 8px; background: transparent; }
+.pdf-source:hover { background: #20372d; }
+.pdf-source-copy { min-width: 0; flex: 1; }
+.pdf-source-copy strong, .pdf-source-copy small { display: block; }
+.pdf-source-copy strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.pdf-source-copy small { margin-top: 4px; color: #9fb2a9; font-size: 10px; }
+.pdf-source-progress { display: grid; flex: 0 0 48px; gap: 5px; color: #b8c9c1; font-size: 10px; text-align: right; }
+.pdf-source-progress b { font-weight: 700; }
+.pdf-source-progress i { display: block; height: 3px; overflow: hidden; border-radius: 3px; background: #354a41; }
+.pdf-source-progress i span { display: block; height: 100%; background: #79d5aa; }
+.sidebar-empty { margin: 18px 10px; color: #91a69c; font-size: 11px; line-height: 1.5; text-align: center; }
 .source-group header { display: flex; justify-content: space-between; gap: 8px; padding: 15px 10px 7px; color: #aabbb3; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .source-group header span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-group.batch-table-list header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.source-group.batch-table-list header .back-to-sources { grid-column: 1 / -1; width: max-content; margin: -5px 0 9px; padding: 4px 0; color: #8fd5b3; border: 0; background: transparent; font-size: 11px; font-weight: 700; letter-spacing: 0; text-transform: none; }
+.source-group.batch-table-list header .back-to-sources:hover { color: #b9ecd2; filter: none; }
+.comparison-current-source > p { margin: 12px 10px; color: #91a69c; font-size: 11px; line-height: 1.5; }
 .table-nav { display: flex; width: 100%; gap: 10px; align-items: flex-start; padding: 10px 9px; color: #dce7e1; text-align: left; border: 0; border-radius: 8px; background: transparent; }
 .table-nav:hover { background: #20372d; }
 .table-nav.selected { color: #fff; background: #28513f; box-shadow: inset 3px 0 #8ce0b7; }

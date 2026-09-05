@@ -143,14 +143,28 @@ function countDifferences(ai: Rows, docling: Rows): number {
   return count;
 }
 
+function rotatedBBox(region: BBox, rotation: number, pageWidth: number, pageHeight: number): BBox {
+  if (rotation === 90) {
+    return { x0: pageHeight - region.bottom, top: region.x0, x1: pageHeight - region.top, bottom: region.x1 };
+  }
+  if (rotation === 180) {
+    return { x0: pageWidth - region.x1, top: pageHeight - region.bottom, x1: pageWidth - region.x0, bottom: pageHeight - region.top };
+  }
+  if (rotation === 270) {
+    return { x0: region.top, top: pageWidth - region.x1, x1: region.bottom, bottom: pageWidth - region.x0 };
+  }
+  return region;
+}
+
 function Sidebar({
   catalog,
   selected,
-  selectedSourceId,
+  reviewSourceId,
   viewMode,
   collapsed,
   onSelect,
-  onSelectSource,
+  onOpenReviewSource,
+  onCloseReviewSource,
   onViewMode,
   onToggleCollapsed,
   saving,
@@ -158,21 +172,36 @@ function Sidebar({
 }: {
   catalog: Catalog;
   selected?: string;
-  selectedSourceId?: string;
+  reviewSourceId?: string;
   viewMode: ViewMode;
   collapsed: boolean;
   onSelect: (sourceId: string, tableId: string) => void;
-  onSelectSource: (sourceId: string) => void;
+  onOpenReviewSource: (sourceId: string) => void;
+  onCloseReviewSource: () => void;
   onViewMode: (mode: ViewMode) => void;
   onToggleCollapsed: () => void;
   saving: boolean;
   onPublish: () => void;
 }) {
   const { language, setLanguage, t } = useI18n();
-  const [filter, setFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [tableFilter, setTableFilter] = useState("");
   const [onlyPending, setOnlyPending] = useState(false);
+  const isBatch = catalog.source_count > 1;
+  const activeReviewSourceId = isBatch ? reviewSourceId : catalog.sources[0]?.id;
   const selectedReviewSourceId = selected?.split(":", 1)[0];
-  const selectedSource = catalog.sources.find((source) => source.id === selectedReviewSourceId);
+  const selectedSource = catalog.sources.find((source) => source.id === activeReviewSourceId)
+    || catalog.sources.find((source) => source.id === selectedReviewSourceId);
+  const visibleSources = catalog.sources.filter((source) => {
+    const matches = source.name.toLowerCase().includes(sourceFilter.trim().toLowerCase());
+    const pending = source.reviewed_count < source.table_count;
+    return matches && (!onlyPending || pending);
+  });
+  const visibleTables = selectedSource?.tables.filter((table) => {
+    const matches = `${table.name} ${table.id} ${pageLabel(table)}`.toLowerCase().includes(tableFilter.trim().toLowerCase());
+    const pending = table.status === "unreviewed";
+    return matches && (!onlyPending || pending);
+  }) || [];
   const applicationLabel = selectedSource?.application_state === "applied"
     ? t("applicationApplied")
     : selectedSource?.application_state === "needs_reapply"
@@ -195,15 +224,17 @@ function Sidebar({
       <div className="overall-progress">
         <i style={{ width: `${catalog.table_count ? (catalog.reviewed_count / catalog.table_count) * 100 : 0}%` }} />
       </div>
-      <div className="view-switch">
+      {activeReviewSourceId ? <div className="view-switch">
         <button className={viewMode === "review" ? "active" : ""} onClick={() => onViewMode("review")}>{t("tableReview")}</button>
         <button className={viewMode === "comparison" ? "active" : ""} onClick={() => onViewMode("comparison")}>{t("documentComparison")}</button>
-      </div>
+      </div> : null}
       {viewMode === "review" ? <div className="filters">
         <input
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          placeholder={t("search")}
+          value={isBatch && !activeReviewSourceId ? sourceFilter : tableFilter}
+          onChange={(event) => isBatch && !activeReviewSourceId
+            ? setSourceFilter(event.target.value)
+            : setTableFilter(event.target.value)}
+          placeholder={t(isBatch && !activeReviewSourceId ? "searchPdf" : isBatch ? "searchCurrentPdf" : "search")}
         />
         <label>
           <input
@@ -215,48 +246,57 @@ function Sidebar({
         </label>
       </div> : null}
       {viewMode === "review" ? <div className="source-list">
-        {catalog.sources.map((source) => {
-          const tables = source.tables.filter((table) => {
-            const matches = `${table.name} ${pageLabel(table)}`.toLowerCase().includes(filter.toLowerCase());
-            const pending = table.status === "unreviewed";
-            return matches && (!onlyPending || pending);
-          });
-          return (
-            <section className="source-group" key={source.id}>
-              <header>
-                <span title={source.name}>{source.name}</span>
-                <small>{source.reviewed_count}/{source.table_count}</small>
-              </header>
-              {tables.map((table) => {
-                const key = `${source.id}:${table.id}`;
-                return (
-                  <button
-                    className={`table-nav ${selected === key ? "selected" : ""} status-${table.status}`}
-                    key={key}
-                    onClick={() => onSelect(source.id, table.id)}
-                  >
-                    <span className="status-icon">{statusIcons[table.status]}</span>
-                    <span className="nav-copy">
-                      <b><span>{pageLabel(table)} · {table.id}</span><small className={table.difference_count === 0 ? "diff-zero" : "diff-found"}>{t("difference", { count: table.difference_count })}</small></b>
-                      <em>{table.name}</em>
-                    </span>
-                  </button>
-                );
-              })}
-            </section>
-          );
-        })}
-      </div> : <div className="source-list comparison-source-list">
-        {catalog.sources.map((source) => <button
-          className={`comparison-source ${selectedSourceId === source.id ? "selected" : ""}`}
-          key={source.id}
-          onClick={() => onSelectSource(source.id)}
-        >
-          <span title={source.name}>{source.name}</span>
-          <small>{t("pageCount", { count: source.page_count })}</small>
-        </button>)}
-      </div>}
-      {viewMode === "review" && selected ? <div className="sidebar-review">
+        {isBatch && !activeReviewSourceId ? <div className="pdf-source-list">
+          {visibleSources.map((source) => <button
+            className="pdf-source"
+            key={source.id}
+            onClick={() => onOpenReviewSource(source.id)}
+          >
+            <span className="pdf-source-copy">
+              <strong title={source.name}>{source.name}</strong>
+              <small>{t("pdfSummary", { tables: source.table_count, pages: source.page_count })}</small>
+            </span>
+            <span className="pdf-source-progress">
+              <b>{source.reviewed_count}/{source.table_count}</b>
+              <i><span style={{ width: `${source.table_count ? (source.reviewed_count / source.table_count) * 100 : 0}%` }} /></i>
+            </span>
+          </button>)}
+          {!visibleSources.length ? <p className="sidebar-empty">{t("noPdfs")}</p> : null}
+        </div> : selectedSource ? <section className={`source-group ${isBatch ? "batch-table-list" : ""}`}>
+          <header>
+            {isBatch ? <button className="back-to-sources" onClick={onCloseReviewSource}>← {t("allPdfs")}</button> : null}
+            <span title={selectedSource.name}>{selectedSource.name}</span>
+            <small>{selectedSource.reviewed_count}/{selectedSource.table_count}</small>
+          </header>
+          {visibleTables.map((table) => {
+            const key = `${selectedSource.id}:${table.id}`;
+            return (
+              <button
+                className={`table-nav ${selected === key ? "selected" : ""} status-${table.status}`}
+                key={key}
+                onClick={() => onSelect(selectedSource.id, table.id)}
+              >
+                <span className="status-icon">{statusIcons[table.status]}</span>
+                <span className="nav-copy">
+                  <b><span>{pageLabel(table)} · {table.id}</span><small className={table.difference_count === 0 ? "diff-zero" : "diff-found"}>{t("difference", { count: table.difference_count })}</small></b>
+                  <em>{table.name}</em>
+                </span>
+              </button>
+            );
+          })}
+          {!visibleTables.length ? <p className="sidebar-empty">{t("noTables")}</p> : null}
+        </section> : null}
+      </div> : selectedSource ? <div className="source-list">
+        <section className={`source-group comparison-current-source ${isBatch ? "batch-table-list" : ""}`}>
+          <header>
+            {isBatch ? <button className="back-to-sources" onClick={onCloseReviewSource}>← {t("allPdfs")}</button> : null}
+            <span title={selectedSource.name}>{selectedSource.name}</span>
+            <small>{t("pageCount", { count: selectedSource.page_count })}</small>
+          </header>
+          <p>{t("comparisonHint")}</p>
+        </section>
+      </div> : null}
+      {viewMode === "review" && selected && activeReviewSourceId ? <div className="sidebar-review">
         <div className={`application-state ${selectedSource?.application_state || "never_applied"}`}>
           <span>{applicationLabel}</span>
           {selectedSource?.last_applied_at ? <time title={selectedSource.last_applied_at}>{t("recorded")}</time> : null}
@@ -288,12 +328,15 @@ function PDFPreview({
   const canvas = useRef<HTMLCanvasElement>(null);
   const [document, setDocument] = useState<PDFDocumentProxy>();
   const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
   const [focus, setFocus] = useState(true);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+  const [pageSize, setPageSize] = useState({ width: 0, height: 0 });
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!available) return;
+    setRotation(0);
     let active = true;
     const task = getDocument({ url });
     task.promise.then((value) => active && setDocument(value)).catch((reason) => setError(String(reason)));
@@ -310,7 +353,8 @@ function PDFPreview({
     document.getPage(page).then((pdfPage) => {
       if (cancelled || !canvas.current) return;
       const scale = 1.35 * zoom;
-      const viewport = pdfPage.getViewport({ scale });
+      const baseViewport = pdfPage.getViewport({ scale: 1 });
+      const viewport = pdfPage.getViewport({ scale, rotation: (pdfPage.rotate + rotation) % 360 });
       const outputScale = window.devicePixelRatio || 1;
       const target = canvas.current;
       target.width = Math.floor(viewport.width * outputScale);
@@ -318,6 +362,7 @@ function PDFPreview({
       target.style.width = `${viewport.width}px`;
       target.style.height = `${viewport.height}px`;
       setViewportSize({ width: viewport.width, height: viewport.height });
+      setPageSize({ width: baseViewport.width, height: baseViewport.height });
       const context = target.getContext("2d")!;
       renderTask = pdfPage.render({
         canvas: target,
@@ -333,22 +378,25 @@ function PDFPreview({
       cancelled = true;
       renderTask?.cancel();
     };
-  }, [document, page, zoom]);
+  }, [document, page, zoom, rotation]);
 
   if (!available) return <div className="pdf-empty">{t("pdfUnavailable")}</div>;
   const scale = 1.35 * zoom;
   const padding = 24;
   const focused = Boolean(focus && region);
-  const stageStyle = focused && region
-    ? { width: (region.x1 - region.x0) * scale + padding * 2, height: (region.bottom - region.top) * scale + padding * 2 }
+  const displayRegion = region && pageSize.width && pageSize.height
+    ? rotatedBBox(region, rotation, pageSize.width, pageSize.height)
+    : region;
+  const stageStyle = focused && displayRegion
+    ? { width: (displayRegion.x1 - displayRegion.x0) * scale + padding * 2, height: (displayRegion.bottom - displayRegion.top) * scale + padding * 2 }
     : { width: viewportSize.width, height: viewportSize.height };
-  const canvasStyle = focused && region
-    ? { left: padding - region.x0 * scale, top: padding - region.top * scale }
+  const canvasStyle = focused && displayRegion
+    ? { left: padding - displayRegion.x0 * scale, top: padding - displayRegion.top * scale }
     : { left: 0, top: 0 };
-  const overlayStyle = region
+  const overlayStyle = displayRegion
     ? focused
-      ? { left: padding, top: padding, width: (region.x1 - region.x0) * scale, height: (region.bottom - region.top) * scale }
-      : { left: region.x0 * scale, top: region.top * scale, width: (region.x1 - region.x0) * scale, height: (region.bottom - region.top) * scale }
+      ? { left: padding, top: padding, width: (displayRegion.x1 - displayRegion.x0) * scale, height: (displayRegion.bottom - displayRegion.top) * scale }
+      : { left: displayRegion.x0 * scale, top: displayRegion.top * scale, width: (displayRegion.x1 - displayRegion.x0) * scale, height: (displayRegion.bottom - displayRegion.top) * scale }
     : undefined;
   return (
     <div className="pdf-panel">
@@ -358,9 +406,11 @@ function PDFPreview({
         </div>
         <div className="viewer-actions">
           <button onClick={() => setFocus(!focus)}>{focus ? t("showFullPage") : t("focusTable")}</button>
+          <button aria-label={t("rotateLeft")} title={t("rotateLeft")} onClick={() => setRotation((value) => (value + 270) % 360)}>↶</button>
+          <button aria-label={t("rotateRight")} title={t("rotateRight")} onClick={() => setRotation((value) => (value + 90) % 360)}>↷</button>
           <button onClick={() => setZoom(Math.max(0.6, zoom - 0.15))}>−</button>
           <span>{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom(Math.min(2, zoom + 0.15))}>＋</button>
+          <button onClick={() => setZoom((value) => value + 0.15)}>＋</button>
         </div>
       </div>
       <div className={`pdf-scroll ${focused ? "focused" : ""}`}>
@@ -782,6 +832,7 @@ function ReviewApp() {
   const [catalog, setCatalog] = useState<Catalog>();
   const [viewMode, setViewMode] = useState<ViewMode>("review");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [reviewSourceId, setReviewSourceId] = useState<string>();
   const [comparisonSourceId, setComparisonSourceId] = useState<string>();
   const [selection, setSelection] = useState<{ sourceId: string; tableId: string }>();
   const [detail, setDetail] = useState<Detail>();
@@ -801,8 +852,9 @@ function ReviewApp() {
   const reloadCatalog = useCallback(async () => {
     const value = await api<Catalog>("/api/project");
     setCatalog(value);
+    setReviewSourceId((current) => value.source_count === 1 ? value.sources[0]?.id : current);
     setComparisonSourceId((current) => current || value.sources[0]?.id);
-    if (!selection && value.sources[0]?.tables[0]) {
+    if (!selection && value.source_count === 1 && value.sources[0]?.tables[0]) {
       setSelection({ sourceId: value.sources[0].id, tableId: value.sources[0].tables[0].id });
     }
   }, [selection]);
@@ -878,6 +930,23 @@ function ReviewApp() {
       setSaving(false);
     }
   };
+  const openReviewSource = async (sourceId: string) => {
+    if (dirty) await save();
+    const nextSource = catalog?.sources.find((item) => item.id === sourceId);
+    setReviewSourceId(sourceId);
+    setComparisonSourceId(sourceId);
+    setSelection((current) => current?.sourceId === sourceId
+      ? current
+      : nextSource?.tables[0]
+        ? { sourceId, tableId: nextSource.tables[0].id }
+        : undefined);
+    setViewMode("review");
+  };
+  const closeReviewSource = async () => {
+    if (dirty) await save();
+    setReviewSourceId(undefined);
+    setViewMode("review");
+  };
 
   const source = catalog?.sources.find((item) => item.id === selection?.sourceId);
   const comparisonSource = catalog?.sources.find((item) => item.id === comparisonSourceId) || catalog?.sources[0];
@@ -921,7 +990,7 @@ function ReviewApp() {
       <Sidebar
         catalog={catalog}
         selected={selection ? `${selection.sourceId}:${selection.tableId}` : undefined}
-        selectedSourceId={comparisonSource?.id}
+        reviewSourceId={reviewSourceId}
         viewMode={viewMode}
         collapsed={sidebarCollapsed}
         onSelect={(sourceId, tableId) => {
@@ -929,10 +998,8 @@ function ReviewApp() {
           setComparisonSourceId(sourceId);
           setViewMode("review");
         }}
-        onSelectSource={(sourceId) => {
-          setComparisonSourceId(sourceId);
-          setViewMode("comparison");
-        }}
+        onOpenReviewSource={(sourceId) => { void openReviewSource(sourceId); }}
+        onCloseReviewSource={() => { void closeReviewSource(); }}
         onViewMode={setViewMode}
         onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
         saving={saving}
