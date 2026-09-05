@@ -1,0 +1,37 @@
+# macOS
+.DS_Store
+
+# Local secrets and configuration
+.env
+.env.*
+!.env.example
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Python build and release artifacts
+build/
+dist/
+dist-new/
+
+# Local conversion/test output
+tmp/
+output/
+log.md
+*.log
+
+# Review UI dependencies and local build output
+review-ui/node_modules/
+review-ui/dist/
+review-ui/tsconfig.tsbuildinfo
+review-ui/npm-debug.log*
