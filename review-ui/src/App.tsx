@@ -225,7 +225,8 @@ function ReviewApp() {
       onViewMode={(mode) => {
         setViewMode(mode);
         const routedSource = catalog.sources.find((item) => item.id === (reviewSourceId || comparisonSourceId));
-        writeReviewRoute({ pdf: routedSource?.pdf_path, table: selection?.sourceId === routedSource?.id ? selection?.tableId : undefined, view: mode });
+        const routedTableId = selection?.sourceId === routedSource?.id ? selection?.tableId : undefined;
+        writeReviewRoute({ pdf: routedSource?.pdf_path, table: routedTableId, pdfPage: mode === "comparison" ? page : undefined, markdownPage: mode === "comparison" ? page : undefined, view: mode });
       }}
       onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
       saving={saving}

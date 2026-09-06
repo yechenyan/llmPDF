@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 import { useI18n } from "../i18n";
 import { getDocument, type PDFDocumentProxy } from "../pdfRuntime";
 import type { ComparisonPayload, SourceSummary } from "../reviewTypes";
-import { api } from "../reviewUtils";
+import { api, readReviewRoute, writeReviewRoute } from "../reviewUtils";
 
 function markdownPages(markdown: string): { page: number; content: string }[] {
   const marker = /<!--\s*page:(\d+)\s*-->/g;
@@ -93,14 +93,41 @@ export function ComparisonView({ source }: { source: SourceSummary }) {
   const left = useRef<HTMLDivElement>(null);
   const right = useRef<HTMLDivElement>(null);
   const synchronizing = useRef<HTMLDivElement | null>(null);
+  const restoring = useRef(false);
+  const positions = useRef({ pdfPage: readReviewRoute().pdfPage, markdownPage: readReviewRoute().markdownPage });
   useEffect(() => {
     setComparison(undefined);
     setError("");
     api<ComparisonPayload>(`/api/sources/${source.id}/comparison`).then(setComparison).catch((reason) => setError(String(reason)));
   }, [source.id]);
   const pages = useMemo(() => markdownPages(comparison?.markdown || ""), [comparison]);
+  const visiblePage = useCallback((container: HTMLDivElement | null): number | undefined => {
+    if (!container) return undefined;
+    const pageElements = Array.from(container.querySelectorAll<HTMLElement>("[data-page]"));
+    if (!pageElements.length) return undefined;
+    const anchor = container.scrollTop + 24;
+    const current = [...pageElements].reverse().find((item) => item.offsetTop <= anchor) || pageElements[0];
+    const value = Number(current.dataset.page);
+    return Number.isInteger(value) && value > 0 ? value : undefined;
+  }, []);
+  const recordPosition = useCallback((side: "pdf" | "markdown", container: HTMLDivElement | null) => {
+    if (restoring.current) return;
+    const currentPage = visiblePage(container);
+    if (!currentPage) return;
+    const key = side === "pdf" ? "pdfPage" : "markdownPage";
+    if (positions.current[key] === currentPage) return;
+    positions.current[key] = currentPage;
+    const route = readReviewRoute();
+    writeReviewRoute({
+      pdf: source.pdf_path || route.pdf,
+      table: route.table,
+      pdfPage: positions.current.pdfPage,
+      markdownPage: positions.current.markdownPage,
+      view: "comparison",
+    }, true);
+  }, [source.pdf_path, visiblePage]);
   const synchronize = useCallback((origin: HTMLDivElement | null, target: HTMLDivElement | null) => {
-    if (!syncEnabled || !origin || !target || synchronizing.current === origin) return;
+    if (restoring.current || !syncEnabled || !origin || !target || synchronizing.current === origin) return;
     const originPages = Array.from(origin.querySelectorAll<HTMLElement>("[data-page]"));
     const targetPages = Array.from(target.querySelectorAll<HTMLElement>("[data-page]"));
     if (!originPages.length || !targetPages.length) return;
@@ -112,12 +139,39 @@ export function ComparisonView({ source }: { source: SourceSummary }) {
     target.scrollTop = Math.max(0, targetPage.offsetTop + progress * targetPage.offsetHeight - 24);
     window.requestAnimationFrame(() => { if (synchronizing.current === target) synchronizing.current = null; });
   }, [syncEnabled]);
+  useEffect(() => {
+    if (!comparison) return;
+    const route = readReviewRoute();
+    positions.current = { pdfPage: route.pdfPage, markdownPage: route.markdownPage };
+    restoring.current = true;
+    let attempts = 0;
+    let frame = 0;
+    const restore = () => {
+      attempts += 1;
+      const moveToPage = (container: HTMLDivElement | null, targetPage?: number) => {
+        if (!container || !targetPage) return true;
+        const target = container.querySelector<HTMLElement>(`[data-page="${targetPage}"]`);
+        if (!target) return false;
+        container.scrollTop = Math.max(0, target.offsetTop - 18);
+        return true;
+      };
+      const pdfReady = moveToPage(left.current, positions.current.pdfPage);
+      const markdownReady = moveToPage(right.current, positions.current.markdownPage);
+      if ((!pdfReady || !markdownReady) && attempts < 180) {
+        frame = window.requestAnimationFrame(restore);
+        return;
+      }
+      frame = window.requestAnimationFrame(() => { restoring.current = false; });
+    };
+    frame = window.requestAnimationFrame(restore);
+    return () => { window.cancelAnimationFrame(frame); restoring.current = false; };
+  }, [comparison, source.id]);
   if (error) return <div className="empty-workspace error-box">{error}</div>;
   if (!comparison) return <div className="empty-workspace">{t("loadingComparison")}</div>;
   return <main className="comparison-workspace">
     <div className="comparison-columns">
-      <section className="comparison-pane"><div className="comparison-pane-title"><strong>PDF</strong><div className="comparison-zoom"><span>{t("pageCount", { count: comparison.selected_pages.length || comparison.page_count })}</span><button aria-label={t("zoomOut")} title={t("zoomOut")} disabled={pdfZoom <= 0.6} onClick={() => setPdfZoom((value) => Math.max(0.6, value - 0.2))}>−</button><b>{Math.round(pdfZoom * 100)}%</b><button aria-label={t("zoomIn")} title={t("zoomIn")} disabled={pdfZoom >= 2} onClick={() => setPdfZoom((value) => Math.min(2, value + 0.2))}>＋</button></div></div><div className="comparison-scroll pdf-comparison-scroll" ref={left} onScroll={() => synchronize(left.current, right.current)}><ContinuousPDF url={comparison.pdf_url} available={source.pdf_available} pageCount={comparison.page_count} pages={comparison.selected_pages} scrollRoot={left.current} zoom={pdfZoom} /></div></section>
-      <section className="comparison-pane"><div className="comparison-pane-title"><strong>Markdown</strong><div className="comparison-pane-actions"><span>output.md</span><label className="sync-toggle compact"><input type="checkbox" checked={syncEnabled} onChange={(event) => setSyncEnabled(event.target.checked)} />{t("syncScroll")}</label></div></div><div className="comparison-scroll markdown-comparison-scroll" ref={right} onScroll={() => synchronize(right.current, left.current)}>{pages.map(({ page, content }) => <article className="markdown-page" data-page={page} key={page}><span className="comparison-page-label">P{page}</span>{content ? <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ img: ({ src, alt }) => <img src={publicArtifactUrl(comparison.artifact_base_url, src)} alt={alt || ""} loading="lazy" />, a: ({ href, children }) => <a href={publicArtifactUrl(comparison.artifact_base_url, href) || href} target="_blank" rel="noreferrer">{children}</a> }}>{content}</ReactMarkdown> : <p className="empty-markdown-page">{t("emptyMarkdownPage")}</p>}</article>)}</div></section>
+      <section className="comparison-pane"><div className="comparison-pane-title"><strong>PDF</strong><div className="comparison-zoom"><span>{t("pageCount", { count: comparison.selected_pages.length || comparison.page_count })}</span><button aria-label={t("zoomOut")} title={t("zoomOut")} disabled={pdfZoom <= 0.6} onClick={() => setPdfZoom((value) => Math.max(0.6, value - 0.2))}>−</button><b>{Math.round(pdfZoom * 100)}%</b><button aria-label={t("zoomIn")} title={t("zoomIn")} disabled={pdfZoom >= 2} onClick={() => setPdfZoom((value) => Math.min(2, value + 0.2))}>＋</button></div></div><div className="comparison-scroll pdf-comparison-scroll" ref={left} onScroll={() => { recordPosition("pdf", left.current); synchronize(left.current, right.current); }}><ContinuousPDF url={comparison.pdf_url} available={source.pdf_available} pageCount={comparison.page_count} pages={comparison.selected_pages} scrollRoot={left.current} zoom={pdfZoom} /></div></section>
+      <section className="comparison-pane"><div className="comparison-pane-title"><strong>Markdown</strong><div className="comparison-pane-actions"><span>output.md</span><label className="sync-toggle compact"><input type="checkbox" checked={syncEnabled} onChange={(event) => setSyncEnabled(event.target.checked)} />{t("syncScroll")}</label></div></div><div className="comparison-scroll markdown-comparison-scroll" ref={right} onScroll={() => { recordPosition("markdown", right.current); synchronize(right.current, left.current); }}>{pages.map(({ page, content }) => <article className="markdown-page" data-page={page} key={page}><span className="comparison-page-label">P{page}</span>{content ? <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ img: ({ src, alt }) => <img src={publicArtifactUrl(comparison.artifact_base_url, src)} alt={alt || ""} loading="lazy" />, a: ({ href, children }) => <a href={publicArtifactUrl(comparison.artifact_base_url, href) || href} target="_blank" rel="noreferrer">{children}</a> }}>{content}</ReactMarkdown> : <p className="empty-markdown-page">{t("emptyMarkdownPage")}</p>}</article>)}</div></section>
     </div>
   </main>;
 }

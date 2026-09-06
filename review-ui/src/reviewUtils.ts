@@ -8,18 +8,26 @@ export const statusIcons: Record<Status, string> = {
 
 export function readReviewRoute(): ReviewRoute {
   const params = new URLSearchParams(window.location.search);
+  const positivePage = (name: string): number | undefined => {
+    const value = Number(params.get(name));
+    return Number.isInteger(value) && value > 0 ? value : undefined;
+  };
   return {
     pdf: params.get("pdf") || undefined,
     table: params.get("table") || undefined,
+    pdfPage: positivePage("pdf_page"),
+    markdownPage: positivePage("markdown_page"),
     view: params.get("view") === "comparison" ? "comparison" : "review",
   };
 }
 
 export function writeReviewRoute(route: ReviewRoute, replace = false): void {
   const url = new URL(window.location.href);
-  for (const key of ["pdf", "table", "view"]) url.searchParams.delete(key);
+  for (const key of ["pdf", "table", "pdf_page", "markdown_page", "view"]) url.searchParams.delete(key);
   if (route.pdf) url.searchParams.set("pdf", route.pdf);
   if (route.table) url.searchParams.set("table", route.table);
+  if (route.pdfPage) url.searchParams.set("pdf_page", String(route.pdfPage));
+  if (route.markdownPage) url.searchParams.set("markdown_page", String(route.markdownPage));
   if (route.view === "comparison") url.searchParams.set("view", route.view);
   window.history[replace ? "replaceState" : "pushState"]({}, "", url);
 }

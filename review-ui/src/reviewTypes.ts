@@ -95,5 +95,7 @@ export interface ComparisonPayload {
 export interface ReviewRoute {
   pdf?: string;
   table?: string;
+  pdfPage?: number;
+  markdownPage?: number;
   view: ViewMode;
 }
