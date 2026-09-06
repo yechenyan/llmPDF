@@ -3,14 +3,14 @@ from __future__ import annotations
 import json
 import re
 import shutil
-import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import Executor, Future, ThreadPoolExecutor, as_completed
 from itertools import pairwise
 from pathlib import Path
 
-from PIL import Image
+import yaml
+from PIL import Image, ImageDraw
 
 from .agent_runner import PiConfig, run_pi, run_prepared_job
 from .io_utils import write_json
@@ -65,7 +65,6 @@ def parse_merge_groups(text: str, pages: list[int]) -> list[list[int]] | None:
     if not isinstance(raw_groups, list) or not raw_groups:
         return None
     groups: list[list[int]] = []
-    flattened: list[int] = []
     for raw in raw_groups:
         if not isinstance(raw, list) or not raw:
             return None
@@ -75,8 +74,15 @@ def parse_merge_groups(text: str, pages: list[int]) -> list[list[int]] | None:
         ):
             return None
         groups.append(group)
-        flattened.extend(group)
-    return groups if flattened == pages else None
+    if sorted({page for group in groups for page in group}) != pages:
+        return None
+    for previous, current in pairwise(groups):
+        if current[0] not in {previous[-1], previous[-1] + 1}:
+            return None
+    counts = {page: sum(page in group for group in groups) for page in pages}
+    if any(count > 2 for count in counts.values()):
+        return None
+    return groups
 
 
 def parse_processed_pages(text: str, pages: list[int]) -> bool:
@@ -141,19 +147,15 @@ def plan_long_chain(
         else parse_merge_groups(result["last_message"], pages)
     )
     if page_groups is None:
-        page_groups = [[page] for page in pages]
-        result["warning"] = "Merge planner failed validation; pages were split safely"
+        raise RuntimeError("Merge planner returned invalid overlapping page groups")
     by_page = {item.job.page: item for item in chain}
     groups = [[by_page[page] for page in group] for group in page_groups]
     write_json(
         leader.directory / "merge_plan.json",
         {"pages": pages, "groups": page_groups, "result": result},
     )
-    membership = {
-        page: index for index, group in enumerate(page_groups) for page in group
-    }
     for previous, current in pairwise(pages):
-        decision = membership[previous] == membership[current]
+        decision = any(previous in group and current in group for group in page_groups)
         target = by_page[current].directory / "continuation_decision.json"
         write_json(target, {"page": current, "merge_with_previous": decision})
     return groups
@@ -184,22 +186,27 @@ def run_prepared_chain(
         return {}
     results: dict[str, dict] = {}
     leader = prepared[0]
-    initial = run_prepared_job(leader.directory, config, keep_session=True)
+    initial = run_prepared_job(leader.directory, config)
     results[leader.job.id] = initial
     if initial["returncode"]:
         return results
 
     for current in prepared[1:]:
         prompt, attachments = _continuation_assets(leader, current)
-        probe = run_pi(
-            job_dir=current.directory,
-            working_dir=leader.agent_output,
-            prompt=prompt,
-            attachments=attachments,
-            log=current.directory / "continuation_pi.jsonl",
-            session=leader.directory / "pi-session.jsonl",
-            config=config,
-        )
+        session = current.directory / "continuation-session.jsonl"
+        try:
+            probe = run_pi(
+                job_dir=current.directory,
+                working_dir=leader.agent_output,
+                prompt=prompt,
+                attachments=attachments,
+                log=current.directory / "continuation_pi.jsonl",
+                session=session,
+                config=config,
+            )
+        finally:
+            if not config.keep_sessions:
+                session.unlink(missing_ok=True)
         decision = parse_merge_decision(str(probe.get("last_message", "")))
         probe["merge_with_previous"] = decision
         results[current.job.id] = probe
@@ -208,7 +215,7 @@ def run_prepared_chain(
         if decision is True:
             continue
 
-        fresh = run_prepared_job(current.directory, config, keep_session=True)
+        fresh = run_prepared_job(current.directory, config)
         fresh["continuation_probe"] = probe
         results[current.job.id] = fresh
         leader = current
@@ -222,7 +229,51 @@ def confirmed_group_attachments(page_images: list[Path]) -> list[Path]:
         raise ValueError(
             "A confirmed multi-page group requires at least two page images"
         )
-    return [page_images[0], page_images[-1]]
+    return list(dict.fromkeys((page_images[0], page_images[1], page_images[-1])))
+
+
+def _boundary_bboxes(output_dir: Path, page: int) -> list[tuple[float, float, float, float]]:
+    bboxes = []
+    for metadata_path in sorted(output_dir.glob("table_*/metadata.yaml")):
+        metadata = yaml.safe_load(metadata_path.read_text(encoding="utf-8")) or {}
+        value = (metadata.get("page_bboxes") or {}).get(str(page))
+        if value:
+            bboxes.append(
+                tuple(float(value[key]) for key in ("x0", "top", "x1", "bottom"))
+            )
+    if not bboxes:
+        raise RuntimeError(f"No extracted bbox found for boundary page {page}")
+    return bboxes
+
+
+def redact_prepared_page(
+    prepared: PreparedJob,
+    bboxes: list[tuple[float, float, float, float]],
+) -> None:
+    """Replace consumed regions in one task's PNG and PDF with white pixels."""
+    page_info = json.loads(
+        (prepared.directory / "assets" / "page_info.json").read_text(encoding="utf-8")
+    )
+    scale_x = float(page_info["scale_x"])
+    scale_y = float(page_info["scale_y"])
+    with Image.open(prepared.page_image) as source:
+        image = source.convert("RGB")
+    draw = ImageDraw.Draw(image)
+    for x0, top, x1, bottom in bboxes:
+        draw.rectangle(
+            (x0 * scale_x, top * scale_y, x1 * scale_x, bottom * scale_y),
+            fill="white",
+        )
+    image.save(prepared.page_image, format="PNG", optimize=True)
+    image.save(
+        prepared.single_page_pdf,
+        format="PDF",
+        resolution=float(page_info["full_dpi"]),
+    )
+    write_json(
+        prepared.directory / "redaction.json",
+        {"page": prepared.job.page, "bboxes": bboxes},
+    )
 
 
 def run_confirmed_group(group: list[PreparedJob], config: PiConfig) -> dict[str, dict]:
@@ -285,13 +336,31 @@ def run_confirmed_group(group: list[PreparedJob], config: PiConfig) -> dict[str,
 def run_dynamic_group(
     group: list[PreparedJob], config: PiConfig
 ) -> dict[str, dict]:
-    """Resolve and extract one ready page group inside the shared scheduler."""
-    if len(group) <= 2:
+    """Plan a candidate chain, then extract overlapping groups in order."""
+    if len(group) == 1:
         return run_prepared_chain(group, config)
+
+    planned = plan_long_chain(group, config)
     results: dict[str, dict] = {}
-    for confirmed in plan_long_chain(group, config):
+    for index, confirmed in enumerate(planned):
         callback = run_confirmed_group if len(confirmed) > 1 else run_prepared_chain
-        results.update(callback(confirmed, config))
+        current_results = callback(confirmed, config)
+        results.update(current_results)
+        if any(int(result.get("returncode", 0)) for result in current_results.values()):
+            return results
+        if len(confirmed) == 1:
+            continue
+
+        boundary = confirmed[-1]
+        bboxes = _boundary_bboxes(confirmed[0].agent_output, boundary.job.page)
+        redact_prepared_page(boundary, bboxes)
+        next_group = planned[index + 1] if index + 1 < len(planned) else None
+        if next_group and next_group[0].job.page == boundary.job.page:
+            continue
+        cleanup_results = run_prepared_chain([boundary], config)
+        results.update(cleanup_results)
+        if any(int(result.get("returncode", 0)) for result in cleanup_results.values()):
+            return results
     return results
 
 
@@ -342,7 +411,7 @@ def run_prepared_jobs(
     started = time.time()
     results: dict[str, object] = {}
     chains = group_prepared_jobs(prepared)
-    planned: list[tuple[list[PreparedJob], bool]] = []
+    planned = prioritize_parse_groups([(chain, False) for chain in chains])
     workers = min(max(1, concurrency), len(prepared))
     owned_executor = (
         ThreadPoolExecutor(max_workers=workers) if executor is None else None
@@ -357,38 +426,10 @@ def run_prepared_jobs(
         return queue.submit(callback, *args)
 
     try:
-        long_chains = [chain for chain in chains if len(chain) > 2]
-        planned_long: dict[int, list[list[PreparedJob]]] = {}
-        if long_chains:
-            planner_slots = threading.Semaphore(max(1, concurrency))
-
-            def plan(chain: list[PreparedJob]) -> list[list[PreparedJob]]:
-                with planner_slots:
-                    return plan_long_chain(chain, config)
-
-            futures = {
-                submit_task(
-                    "cross_table",
-                    f"merge plan pages {chain[0].job.page}-{chain[-1].job.page}",
-                    plan,
-                    chain,
-                ): chain
-                for chain in long_chains
-            }
-            for future in as_completed(futures):
-                chain = futures[future]
-                planned_long[id(chain)] = future.result()
-        for chain in chains:
-            if len(chain) <= 2:
-                planned.append((chain, False))
-            else:
-                planned.extend((group, True) for group in planned_long[id(chain)])
-        planned = prioritize_parse_groups(planned)
-
         # The pipeline scheduler selects by task type at dispatch time. A plain
         # Executor remains supported for the standalone llmpdf-table command.
         table_futures: dict[Future, list[PreparedJob]] = {}
-        for group, confirmed in planned:
+        for group, _confirmed in planned:
             cross_table = len(group) > 1
             kind = "cross_table" if cross_table else "table"
             pages = [item.job.page for item in group]
@@ -400,7 +441,7 @@ def run_prepared_jobs(
             future = submit_task(
                 kind,
                 label,
-                run_confirmed_group if confirmed else run_prepared_chain,
+                run_dynamic_group,
                 group,
                 config,
             )

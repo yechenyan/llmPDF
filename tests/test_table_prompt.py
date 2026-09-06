@@ -31,6 +31,10 @@ class PromptTest(unittest.TestCase):
         self.assertIn("Do not separately read the CSV or metadata afterward", prompt)
         self.assertIn("REQUIRES_VISUAL_REVIEW", prompt)
         self.assertIn("Do not generate `metadata.yaml` yourself", prompt)
+        self.assertIn(
+            "Titles inside the table border must also remain in the CSV as header rows, repeating merged cells as required.",
+            prompt,
+        )
         self.assertNotIn("run_reference_check", prompt)
         self.assertNotIn("subprocess", prompt)
         self.assertNotIn("/Users/", prompt)
@@ -56,17 +60,14 @@ class PromptTest(unittest.TestCase):
             [{"physical_page": page} for page in [25, 26, 27]],
         )
         self.assertIn("pages 25–27 of the PDF as CSV", parsing)
-        self.assertIn("pages [25, 26, 27]", parsing)
-        self.assertIn("confirmed as one mergeable table", parsing)
-        self.assertIn("Write extract.py once", parsing)
-        self.assertIn("run the shared batch command below once", parsing)
-        self.assertIn("images of pages 25 and 27", parsing)
-        self.assertIn("all other pages are available in ../assets", parsing)
-        self.assertIn("independent tables that do not belong", parsing)
-        self.assertIn("Do not begin by processing only page 25", parsing)
-        self.assertIn("Prefer batch extraction when accuracy permits", parsing)
-        self.assertIn("assign page text to rows and columns by coordinates", parsing)
-        self.assertIn("Use separate `crop()` checks only", parsing)
+        self.assertIn("Pages [25, 26, 27] contain one continuous table", parsing)
+        self.assertIn("run the shared batch command below exactly once", parsing)
+        self.assertIn("Images of pages 25, 26, 27 represent the first, middle, and last layouts", parsing)
+        self.assertIn("Extract visible independent tables on the first page", parsing)
+        self.assertIn("stop at the end of the continuous table", parsing)
+        self.assertIn("SOURCE_PAGES = [25, 26, 27]", parsing)
+        self.assertIn('"middle": (0.0, 0.0, 0.0, 0.0)', parsing)
+        self.assertIn("page_bboxes=PAGE_BBOXES", parsing)
         self.assertEqual(parsing.count("## Special advisory rules"), 1)
         self.assertEqual(parsing.count("### Advisory 1: Avoid repeated per-cell extraction"), 1)
         self.assertIn("Avoid calling `crop().extract_text()` inside data-row or data-column loops", parsing)
@@ -82,7 +83,7 @@ class PromptTest(unittest.TestCase):
         self.assertNotIn("forbidden", parsing)
         self.assertIn('"processed_pages": [25, 26, 27]', parsing)
         self.assertIn('follow the fast-exit requirement and return only:\n{"tables": 0}', parsing)
-        self.assertNotIn("source_pages", parsing)
+        self.assertIn("source_pages=SOURCE_PAGES", parsing)
 
 
 if __name__ == "__main__":

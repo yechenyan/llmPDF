@@ -143,30 +143,48 @@ class ReviewSource:
             "last_published_at"
         )
         draft_updated_at = draft.get("updated_at")
-        if not last_applied_at:
-            state = "never_applied"
-        elif draft_updated_at and str(draft_updated_at) > str(last_applied_at):
-            state = "needs_reapply"
-        else:
-            state = "applied"
+        decisions = draft.get("tables", {})
+        pending_content = False
+        applied_content = False
+        for table in self.source_metadata().get("tables", []):
+            table_id = str(table["id"])
+            ai_rows = read_csv_rows(self.source_ai_csv(table_id))
+            current_csv = _safe_path(self.root, str(table["csv"]))
+            current_rows = read_csv_rows(current_csv) if current_csv.is_file() else ai_rows
+            decision = decisions.get(table_id) or {}
+            draft_rows = decision.get("rows")
+            desired_rows = draft_rows if isinstance(draft_rows, list) else current_rows
+            pending_content |= count_row_differences(desired_rows, current_rows) > 0
+            applied_content |= count_row_differences(current_rows, ai_rows) > 0
+        state = (
+            "pending_apply"
+            if pending_content
+            else "applied"
+            if applied_content
+            else "no_apply_needed"
+        )
         return {
             "application_state": state,
             "last_applied_at": last_applied_at,
             "draft_updated_at": draft_updated_at,
         }
 
-    def pdf_path(self) -> Path | None:
+    def configured_pdf_path(self) -> Path | None:
+        """Return the configured source PDF as an absolute path, if known."""
         source = self.source_metadata().get("source", {})
         configured = source.get("path")
         if configured:
             candidate = Path(str(configured)).expanduser()
             if not candidate.is_absolute():
                 candidate = self.root / candidate
-            if candidate.is_file():
-                return candidate.resolve()
+            return candidate.resolve()
         filename = source.get("file")
         local = self.root / str(filename) if filename else None
-        return local.resolve() if local and local.is_file() else None
+        return local.resolve() if local else None
+
+    def pdf_path(self) -> Path | None:
+        candidate = self.configured_pdf_path()
+        return candidate if candidate and candidate.is_file() else None
 
     def artifact_path(self, relative: str) -> Path:
         """Resolve a public Markdown asset without exposing other result files."""
@@ -214,7 +232,8 @@ class ReviewSource:
             str(item["id"]): item for item in metadata.get("docling_tables", [])
         }
         fragments = []
-        regions: dict[str, Any] = {str(table["page"]): table.get("bbox")}
+        regions: dict[str, Any] = dict(table.get("page_bboxes") or {})
+        regions.setdefault(str(table["page"]), table.get("bbox"))
         for docling_id in (table.get("lineage") or {}).get("docling_table_ids", []):
             record = docling_by_id.get(str(docling_id))
             if not record:
@@ -226,7 +245,7 @@ class ReviewSource:
                 if path.is_file():
                     markdown = path.read_text(encoding="utf-8")
             page = int(record["page"])
-            regions[str(page)] = record.get("bbox")
+            regions.setdefault(str(page), record.get("bbox"))
             fragments.append(
                 {
                     "id": record["id"],
@@ -240,6 +259,7 @@ class ReviewSource:
 
     def summary(self) -> dict[str, Any]:
         metadata = self.source_metadata()
+        configured_pdf = self.configured_pdf_path()
         drafts = self.draft().get("tables", {})
         tables = []
         reviewed = 0
@@ -248,9 +268,15 @@ class ReviewSource:
             decision = drafts.get(table_id) or table.get("review") or {}
             status = normalize_review_status(decision.get("status"))
             fragments, _ = self.docling_fragments(metadata, table)
+            ai_rows = read_csv_rows(self.source_ai_csv(table_id))
+            reviewed_rows = decision.get("rows") if isinstance(decision, dict) else None
             difference_count = count_row_differences(
-                read_csv_rows(self.source_ai_csv(table_id)),
+                ai_rows,
                 combine_docling_rows(fragments),
+            )
+            manual_difference_count = count_row_differences(
+                ai_rows,
+                reviewed_rows if isinstance(reviewed_rows, list) else ai_rows,
             )
             reviewed += int(status in REVIEWED_STATUSES)
             tables.append(
@@ -263,6 +289,9 @@ class ReviewSource:
                     "name": table.get("name") or table_id,
                     "status": status,
                     "difference_count": difference_count,
+                    "manual_difference_count": manual_difference_count,
+                    "has_note": bool(str(decision.get("note", "")).strip()),
+                    "marked": bool(decision.get("marked", False)),
                     "lineage_action": (table.get("lineage") or {}).get("action"),
                 }
             )
@@ -272,7 +301,13 @@ class ReviewSource:
             "name": source.get("file") or self.root.name,
             "path_base": "result_dir",
             "result_dir": ".",
-            "pdf_available": self.pdf_path() is not None,
+            "pdf_path": str(configured_pdf) if configured_pdf else None,
+            "pdf_relative_path": (
+                relative_reference(configured_pdf, self.root.parent)
+                if configured_pdf
+                else source.get("file") or self.root.name
+            ),
+            "pdf_available": configured_pdf is not None and configured_pdf.is_file(),
             "page_count": int(source.get("page_count", 0)),
             "selected_pages": [
                 int(page)
@@ -283,6 +318,11 @@ class ReviewSource:
             ],
             "table_count": len(tables),
             "reviewed_count": reviewed,
+            "modified_table_count": sum(
+                int(table["manual_difference_count"] > 0) for table in tables
+            ),
+            "noted_table_count": sum(int(table["has_note"]) for table in tables),
+            "marked_table_count": sum(int(table["marked"]) for table in tables),
             **self.application_state(),
             "tables": tables,
         }
@@ -293,10 +333,12 @@ class ReviewSource:
         ai_csv = self.source_ai_csv(table_id)
         fragments, regions = self.docling_fragments(metadata, table)
         draft = self.draft().get("tables", {}).get(table_id)
+        applied_csv = _safe_path(self.root, str(table["csv"]))
         return {
             "source_id": self.id,
             "table": table,
             "ai_rows": read_csv_rows(ai_csv),
+            "applied_rows": read_csv_rows(applied_csv),
             "docling_fragments": fragments,
             "docling_rows": combine_docling_rows(fragments),
             "preview_regions": regions,
@@ -319,10 +361,14 @@ class ReviewSource:
             )
         ):
             raise ValueError("rows must be a two-dimensional string array")
+        marked = decision.get("marked", False)
+        if not isinstance(marked, bool):
+            raise ValueError("marked must be a boolean")
         stored = {
             "status": status,
             "selected_source": decision.get("selected_source"),
             "note": str(decision.get("note", "")),
+            "marked": marked,
             "rows": rows,
             "updated_at": utc_now(),
         }
@@ -383,6 +429,7 @@ class ReviewSource:
                     "status": status,
                     "selected_source": decision.get("selected_source", "ai"),
                     "note": decision.get("note", ""),
+                    "marked": bool(decision.get("marked", False)),
                     "published_at": published_at,
                     "csv_sha256": sha256_file(csv_path),
                 }

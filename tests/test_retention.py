@@ -57,6 +57,9 @@ def make_successful_result(tmp_path: Path) -> PipelineConfig:
                     "id": "table-0001",
                     "page": 1,
                     "source_pages": [1],
+                    "page_bboxes": {
+                        "1": {"x0": 1, "top": 2, "x1": 100, "bottom": 50}
+                    },
                     "internal": {
                         "extractor": "work/table-assets/table-0001/extract.py"
                     },
@@ -98,6 +101,9 @@ def test_minimal_retention_removes_reproducible_work_and_restores_blocks(
     assert read_json(config.work_dir / "table-code" / "tables.json")["tables"][0][
         "source_pages"
     ] == [1]
+    assert "1" in read_json(config.work_dir / "table-code" / "tables.json")[
+        "tables"
+    ][0]["page_bboxes"]
     restored = restore_run_blocks(config.output_dir, manifest)
     with gzip.open(config.work_dir / "run-blocks.json.gz", "rt") as stream:
         assert '"block-1"' in stream.read()

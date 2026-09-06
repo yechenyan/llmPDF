@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shutil
 from collections import defaultdict
 from typing import Any
@@ -13,6 +14,11 @@ from .task import PipelineTask
 
 def normalized_text(value: str) -> str:
     return " ".join(value.replace("*", "").replace("#", "").split()).casefold()
+
+
+def is_numbered_section_title(value: str) -> bool:
+    plain = value.lstrip("#* ").strip()
+    return re.match(r"^\d+(?:\.\d+)+\s+\S", plain) is not None
 
 
 def horizontal_overlap(a: BBox, b: BBox) -> float:
@@ -82,6 +88,7 @@ def public_table_record(table: dict[str, Any]) -> dict[str, Any]:
             "id",
             "page",
             "source_pages",
+            "page_bboxes",
             "page_table_index",
             "name",
             "header_rows",
@@ -136,6 +143,11 @@ def collect_direct_table_relations(
     return relations
 
 
+def table_bbox_for_page(table: dict[str, Any], page: int) -> BBox:
+    page_bboxes = table.get("page_bboxes") or {}
+    return BBox.from_dict(page_bboxes.get(str(page), table["bbox"]))
+
+
 def build_table_lineage(
     tables: list[dict[str, Any]],
     docling_tables: list[DocumentBlock],
@@ -177,7 +189,9 @@ def build_table_lineage(
             ]
             if block.page not in source_pages or block.page == int(table["page"]):
                 continue
-            score = horizontal_overlap(BBox.from_dict(table["bbox"]), block.bbox)
+            score = horizontal_overlap(
+                table_bbox_for_page(table, block.page), block.bbox
+            )
             candidates.append((score, table_id))
         candidates.sort(reverse=True)
         if len(candidates) == 1 and candidates[0][0] >= 0.35:
@@ -360,7 +374,7 @@ class MergeMarkdownTask(PipelineTask):
 
     def signature_payload(self, config: PipelineConfig) -> dict:
         value = super().signature_payload(config)
-        value["merge_logic_version"] = 12
+        value["merge_logic_version"] = 13
         value["retain_docling_tables"] = config.retain_docling_tables
         for name, path in {
             "blocks": config.work_dir / "docling" / "blocks.json",
@@ -423,6 +437,11 @@ class MergeMarkdownTask(PipelineTask):
         direct_relations = collect_direct_table_relations(
             tables_by_page, blocks_by_page
         )
+        replaced_docling_block_ids = {
+            str(relation["block_id"])
+            for relations in direct_relations.values()
+            for relation in relations
+        }
         lineage_by_table, public_docling_tables = build_table_lineage(
             table_payload["tables"], docling_tables, direct_relations
         )
@@ -433,6 +452,17 @@ class MergeMarkdownTask(PipelineTask):
         for page in selected_pages:
             blocks = sorted(blocks_by_page.get(page, []), key=lambda block: block.order)
             used_docling: set[str] = set()
+            numbered_table_headings = {
+                table.id: caption.markdown.strip()
+                for caption in blocks
+                if caption.kind == "caption"
+                and is_numbered_section_title(caption.markdown)
+                for table in blocks
+                if table.id in replaced_docling_block_ids
+                and table.kind == "table"
+                and normalized_text(caption.markdown)
+                in normalized_text(table.markdown)
+            }
             absorbed_ids: set[str] = {
                 caption.id
                 for caption in blocks
@@ -517,11 +547,15 @@ class MergeMarkdownTask(PipelineTask):
                 end_page = max(
                     int(value) for value in table.get("source_pages", [page])
                 )
-                wrapped = (
+                wrapped_parts = []
+                if matched and matched.id in numbered_table_headings:
+                    wrapped_parts.append(f"### {numbered_table_headings[matched.id]}")
+                wrapped_parts.append(
                     f"<!-- table:{table['id']} page:{page} -->\n\n"
                     f"{markdown}\n\n"
                     f"<!-- /table:{table['id']} page:{end_page} -->"
                 )
+                wrapped = "\n\n".join(wrapped_parts)
                 merge = {
                     "action": action,
                     "matched_block": matched.id if matched else None,

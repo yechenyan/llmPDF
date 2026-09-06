@@ -196,6 +196,17 @@ def run_external_table(
 
 def continuation_groups(runs: Path, jobs: list[dict]) -> list[dict]:
     """Return only continuation chains the table Agent actually accepted."""
+    planned = []
+    for path in sorted(runs.glob("page-*/merge_plan.json")):
+        for pages in read_json(path).get("groups", []):
+            normalized = [int(page) for page in pages]
+            if len(normalized) > 1:
+                planned.append(
+                    {"leader_page": normalized[0], "pages": normalized}
+                )
+    if planned:
+        return planned
+
     groups: list[dict] = []
     active: dict | None = None
     previous_page: int | None = None

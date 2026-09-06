@@ -32,7 +32,15 @@ class ReviewProject:
 
     def catalog(self) -> dict[str, Any]:
         with self.lock:
-            sources = [source.summary() for source in self.sources.values()]
+            sources = []
+            for source in self.sources.values():
+                try:
+                    sources.append(source.summary())
+                except FileNotFoundError:
+                    # Batch conversions replace result artifacts while they run.
+                    # Keep the review catalog available and let the source reappear
+                    # automatically once its result directory is complete again.
+                    continue
         return {
             "schema_version": 1,
             "source_count": len(sources),

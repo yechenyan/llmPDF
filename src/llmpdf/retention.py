@@ -64,6 +64,7 @@ def _preserve_table_code(config: PipelineConfig) -> Path:
                 "source_pages": [
                     int(page) for page in table.get("source_pages", [table["page"]])
                 ],
+                "page_bboxes": dict(table.get("page_bboxes") or {}),
                 "extractor": relative_reference(destination, config.output_dir),
                 "sha256": sha256_file(destination),
             }

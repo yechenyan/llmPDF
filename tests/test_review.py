@@ -113,10 +113,16 @@ def test_review_detail_and_publish_round_trip(tmp_path: Path) -> None:
     assert source.pdf_path() == (tmp_path / "sample.pdf").resolve()
     assert source.summary()["path_base"] == "result_dir"
     assert source.summary()["result_dir"] == "."
+    assert source.summary()["pdf_path"] == str((tmp_path / "sample.pdf").resolve())
+    assert source.summary()["pdf_relative_path"] == "../sample.pdf"
     detail = source.detail("table-0001")
     assert detail["ai_rows"] == [["A", "B"], ["1", "2"]]
     assert detail["docling_rows"] == [["A", "B"], ["3", "4"]]
     assert source.summary()["tables"][0]["difference_count"] == 2
+    assert source.summary()["tables"][0]["manual_difference_count"] == 0
+    assert source.summary()["modified_table_count"] == 0
+    assert source.summary()["noted_table_count"] == 0
+    assert source.summary()["marked_table_count"] == 0
 
     source.save_draft(
         "table-0001",
@@ -124,9 +130,14 @@ def test_review_detail_and_publish_round_trip(tmp_path: Path) -> None:
             "status": "approved",
             "selected_source": "docling",
             "note": "Docling is correct",
+            "marked": True,
             "rows": detail["docling_rows"],
         },
     )
+    assert source.summary()["tables"][0]["manual_difference_count"] == 2
+    assert source.summary()["modified_table_count"] == 1
+    assert source.summary()["noted_table_count"] == 1
+    assert source.summary()["marked_table_count"] == 1
     result = source.publish()
 
     assert result["published_tables"] == ["table-0001"]
@@ -141,11 +152,25 @@ def test_review_detail_and_publish_round_trip(tmp_path: Path) -> None:
     metadata = read_json(root / "assets" / "metadata.json")
     assert metadata["tables"][0]["review"]["status"] == "approved"
     assert metadata["tables"][0]["review"]["selected_source"] == "docling"
+    assert metadata["tables"][0]["review"]["marked"] is True
     assert (
         read_json(root / "work" / "diagnostics" / "validation.json")["status"]
         == "passed"
     )
     assert list((root / "work" / "review" / "history").glob("*/output.md"))
+
+
+def test_review_prefers_ai_page_bboxes_for_preview(tmp_path: Path) -> None:
+    root = make_result(tmp_path)
+    metadata_path = root / "assets" / "metadata.json"
+    metadata = read_json(metadata_path)
+    ai_bbox = {"x0": 10, "top": 20, "x1": 90, "bottom": 40}
+    metadata["tables"][0]["page_bboxes"] = {"1": ai_bbox}
+    write_json(metadata_path, metadata)
+
+    detail = ReviewSource(root=root, id="sample").detail("table-0001")
+
+    assert detail["preview_regions"]["1"] == ai_bbox
 
 
 def test_review_comparison_exposes_markdown_and_only_public_assets(
@@ -176,13 +201,13 @@ def test_review_comparison_exposes_markdown_and_only_public_assets(
 def test_review_application_state_is_persisted(tmp_path: Path) -> None:
     root = make_result(tmp_path)
     source = ReviewSource(root=root, id="sample")
-    assert source.summary()["application_state"] == "never_applied"
+    assert source.summary()["application_state"] == "no_apply_needed"
 
     source.save_draft(
         "table-0001",
         {"status": "approved", "rows": [["A", "B"], ["3", "4"]]},
     )
-    assert source.summary()["application_state"] == "never_applied"
+    assert source.summary()["application_state"] == "pending_apply"
 
     source.publish()
     applied = source.summary()
@@ -194,8 +219,28 @@ def test_review_application_state_is_persisted(tmp_path: Path) -> None:
         {"status": "ignored", "rows": [["A", "B"], ["5", "6"]]},
     )
     pending = source.summary()
-    assert pending["application_state"] == "needs_reapply"
+    assert pending["application_state"] == "pending_apply"
     assert pending["draft_updated_at"] > pending["last_applied_at"]
+
+
+def test_note_and_mark_do_not_require_apply(tmp_path: Path) -> None:
+    root = make_result(tmp_path)
+    source = ReviewSource(root=root, id="sample")
+
+    source.save_draft(
+        "table-0001",
+        {
+            "status": "unreviewed",
+            "note": "Check this again",
+            "marked": True,
+            "rows": [["A", "B"], ["1", "2"]],
+        },
+    )
+
+    summary = source.summary()
+    assert summary["application_state"] == "no_apply_needed"
+    assert summary["noted_table_count"] == 1
+    assert summary["marked_table_count"] == 1
 
 
 def test_review_status_does_not_control_published_rows(tmp_path: Path) -> None:
@@ -248,3 +293,15 @@ def test_resolve_multiple_results_and_batch(tmp_path: Path) -> None:
     roots = resolve_results(results=[first], batches=[second.parent])
     assert roots == [first.resolve(), second.resolve()]
     assert ReviewProject(roots).catalog()["source_count"] == 2
+
+
+def test_review_catalog_skips_temporarily_missing_result(tmp_path: Path) -> None:
+    stable = make_result(tmp_path / "stable")
+    changing = make_result(tmp_path / "changing")
+    project = ReviewProject([stable, changing])
+
+    (changing / "assets" / "metadata.json").unlink()
+
+    catalog = project.catalog()
+    assert catalog["source_count"] == 1
+    assert catalog["table_count"] == 1

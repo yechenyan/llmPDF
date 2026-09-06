@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import json
+import os
 import threading
 import webbrowser
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 from .review import ReviewProject
+
+_REVIEW_ROOTS_ENV = "LLMPDF_REVIEW_ROOTS"
 
 
 def create_review_app(project: ReviewProject) -> Any:
@@ -92,11 +97,22 @@ def create_review_app(project: ReviewProject) -> Any:
     return app
 
 
+def create_review_app_from_environment() -> Any:
+    """Build the app in Uvicorn's reload worker from serialized result roots."""
+    raw_roots = os.environ.get(_REVIEW_ROOTS_ENV, "[]")
+    roots = [Path(value) for value in json.loads(raw_roots)]
+    if not roots:
+        raise RuntimeError("No review result roots were provided to the reload worker")
+    return create_review_app(ReviewProject(roots))
+
+
 def run_review_server(
     project: ReviewProject,
     host: str = "127.0.0.1",
     port: int = 8765,
     open_browser: bool = True,
+    reload: bool = False,
+    roots: Iterable[Path] | None = None,
 ) -> None:
     try:
         import uvicorn
@@ -111,4 +127,19 @@ def run_review_server(
         f"Review server: {url}\n"
         f"Loaded: {len(project.sources)} PDF(s), {project.catalog()['table_count']} table(s)"
     )
+    if reload:
+        reload_roots = [str(Path(root).resolve()) for root in roots or []]
+        if not reload_roots:
+            raise RuntimeError("Reload mode requires the review result roots")
+        os.environ[_REVIEW_ROOTS_ENV] = json.dumps(reload_roots)
+        uvicorn.run(
+            "llmpdf.review_server:create_review_app_from_environment",
+            factory=True,
+            host=host,
+            port=port,
+            log_level="info",
+            reload=True,
+            reload_dirs=[str(Path(__file__).parent)],
+        )
+        return
     uvicorn.run(create_review_app(project), host=host, port=port, log_level="info")

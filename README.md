@@ -336,6 +336,9 @@ uv run --extra review llmpdf review \
 ```
 
 The UI opens at `http://127.0.0.1:8765/` by default. Its document-comparison view displays the PDF on the left and generated Markdown on the right, with synchronized scrolling, a collapsible sidebar, and PDF zoom controls.
+Selecting a PDF and table updates the URL with the PDF's absolute source path and
+the table ID. These links can be copied, refreshed, and navigated with the
+browser's back and forward buttons while the same review project is running.
 
 Load multiple results by repeating `--result`:
 

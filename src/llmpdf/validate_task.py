@@ -33,6 +33,20 @@ class ValidateTask(PipelineTask):
         if int(metadata.get("schema_version", 0)) != 3:
             errors.append("metadata schema_version is not 3")
         pages = [int(value) for value in re.findall(r"<!-- page:(\d+) -->", markdown)]
+        page_coverage: list[int] = []
+        merged_page_markers: list[tuple[int, int, str]] = []
+        for marker in re.finditer(
+            r"<!-- page:(\d+) -->|<!-- pages:(\d+)-(\d+) merged-into:([^ ]+) -->",
+            markdown,
+        ):
+            if marker.group(1):
+                page_coverage.append(int(marker.group(1)))
+                continue
+            start = int(marker.group(2))
+            end = int(marker.group(3))
+            table_id = str(marker.group(4))
+            merged_page_markers.append((start, end, table_id))
+            page_coverage.extend(range(start, end + 1))
         source = metadata["source"]
         expected_pages = [
             int(page)
@@ -44,8 +58,10 @@ class ValidateTask(PipelineTask):
             errors.append("source.selected_pages must be sorted and unique")
         if any(page < 1 or page > int(source["page_count"]) for page in expected_pages):
             errors.append("source.selected_pages contains an out-of-range page")
-        if pages != expected_pages:
-            errors.append(f"page markers are {pages}, expected {expected_pages}")
+        if page_coverage != expected_pages:
+            errors.append(
+                f"page markers cover {page_coverage}, expected {expected_pages}"
+            )
         table_markers = re.findall(r"<!-- table:([^ ]+) page:(\d+) -->", markdown)
         ordered_tables = sorted(
             metadata["tables"],
@@ -58,6 +74,19 @@ class ValidateTask(PipelineTask):
         expected_tables = [
             (table["id"], str(table["page"])) for table in ordered_tables
         ]
+        tables_by_id = {str(table["id"]): table for table in metadata["tables"]}
+        for start, end, table_id in merged_page_markers:
+            table = tables_by_id.get(table_id)
+            continuation_pages = list(range(start, end + 1))
+            expected_continuation = (
+                [int(page) for page in table.get("source_pages", [table["page"]])][1:]
+                if table
+                else []
+            )
+            if table is None or continuation_pages != expected_continuation:
+                errors.append(
+                    f"merged page marker {start}-{end} does not match {table_id} source_pages"
+                )
         if table_markers != expected_tables:
             errors.append(
                 "table markers do not match metadata page/bbox order or contain duplicates"
@@ -285,7 +314,7 @@ class ValidateTask(PipelineTask):
                 "status": "failed" if errors else "passed",
                 "errors": errors,
                 "warnings": warnings,
-                "page_count": len(pages),
+                "page_count": len(page_coverage),
                 "table_count": len(table_markers),
                 "docling_table_count": len(docling_tables),
                 "retained_docling_table_count": retained_count,
@@ -299,7 +328,7 @@ class ValidateTask(PipelineTask):
             "completed",
             [relativize(report, config.output_dir)],
             {
-                "page_count": len(pages),
+                "page_count": len(page_coverage),
                 "table_count": len(table_markers),
                 "docling_table_count": len(docling_tables),
                 "retained_docling_table_count": retained_count,

@@ -4,7 +4,7 @@ import argparse
 import csv
 import json
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 import yaml
@@ -61,11 +61,19 @@ def _validation_status(spatial_status: str | None) -> str:
     return "REVIEW_REQUIRED"
 
 
-def _page_info(output_dir: Path) -> dict:
+def _page_info(pdf_path: Path, output_dir: Path) -> dict:
+    match = re.search(r"page_(\d+)$", pdf_path.stem)
+    page_specific = f"page_info_{int(match.group(1)):04d}.json" if match else None
     for parent in (output_dir, *output_dir.parents):
-        path = parent / "assets" / "page_info.json"
-        if path.is_file():
-            return json.loads(path.read_text(encoding="utf-8"))
+        assets = parent / "assets"
+        candidates = (
+            [assets / page_specific, assets / "page_info.json"]
+            if page_specific
+            else [assets / "page_info.json"]
+        )
+        for path in candidates:
+            if path.is_file():
+                return json.loads(path.read_text(encoding="utf-8"))
     raise FileNotFoundError("Could not find assets/page_info.json above the output directory")
 
 
@@ -89,12 +97,53 @@ def _validated_bbox(bbox: Sequence[float], page_info: dict) -> tuple[float, floa
     return x0, top, x1, bottom
 
 
+def _bbox_record(bbox: Sequence[float], page_info: dict) -> dict:
+    x0, top, x1, bottom = _validated_bbox(bbox, page_info)
+    return {
+        "coordinate_system": "pdfplumber_top_left",
+        "unit": "pt",
+        "approximate": True,
+        "x0": x0,
+        "top": top,
+        "x1": x1,
+        "bottom": bottom,
+    }
+
+
+def _expanded_page_bboxes(
+    output_dir: Path,
+    source_pages: Sequence[int],
+    page_bboxes: Mapping[str, Sequence[float]],
+) -> dict[str, dict]:
+    pages = [int(page) for page in source_pages]
+    if not pages or any(right != left + 1 for left, right in zip(pages, pages[1:])):
+        raise ValueError("source_pages must be a non-empty consecutive page sequence")
+    expected = {"first"} if len(pages) == 1 else {"first", "last"}
+    if len(pages) > 2:
+        expected.add("middle")
+    if set(page_bboxes) != expected:
+        raise ValueError(f"page_bboxes must contain exactly {sorted(expected)}")
+
+    roles = ["first"]
+    if len(pages) > 2:
+        roles.extend(["middle"] * (len(pages) - 2))
+    if len(pages) > 1:
+        roles.append("last")
+    expanded = {}
+    for page, role in zip(pages, roles, strict=True):
+        page_info = _page_info(Path(f"page_{page:04d}.pdf"), output_dir)
+        expanded[str(page)] = _bbox_record(page_bboxes[role], page_info)
+    return expanded
+
+
 def finalize_table(
     *,
     pdf_path: Path,
     output_dir: Path,
     name: str | None,
-    bbox: Sequence[float],
+    bbox: Sequence[float] | None = None,
+    source_pages: Sequence[int] | None = None,
+    page_bboxes: Mapping[str, Sequence[float]] | None = None,
     spatial_check: bool = False,
 ) -> Path:
     output_dir = output_dir.resolve()
@@ -102,24 +151,42 @@ def finalize_table(
     if not csv_paths:
         raise FileNotFoundError(f"No output_*.csv was generated in {output_dir}")
 
-    page_info = _page_info(output_dir)
-    x0, top, x1, bottom = _validated_bbox(bbox, page_info)
+    if (source_pages is None) != (page_bboxes is None):
+        raise ValueError("source_pages and page_bboxes must be provided together")
+    if source_pages is not None and page_bboxes is not None:
+        resolved_page_bboxes = _expanded_page_bboxes(
+            output_dir, source_pages, page_bboxes
+        )
+    else:
+        if bbox is None:
+            raise ValueError("bbox is required for a single-page table")
+        page_info = _page_info(pdf_path, output_dir)
+        physical_page = int(page_info["physical_page"])
+        current_bbox = _bbox_record(bbox, page_info)
+        resolved_page_bboxes = {str(physical_page): current_bbox}
+    metadata_path = output_dir / "metadata.yaml"
+    previous = (
+        yaml.safe_load(metadata_path.read_text(encoding="utf-8"))
+        if metadata_path.is_file()
+        else {}
+    ) or {}
+    accumulated = dict(previous.get("page_bboxes") or {})
+    if previous.get("bbox") and previous.get("page") is not None:
+        accumulated.setdefault(str(int(previous["page"])), previous["bbox"])
+    accumulated.update(resolved_page_bboxes)
+    resolved_source_pages = sorted(int(page) for page in accumulated)
+    anchor_page = resolved_source_pages[0]
     metadata = {
         "schema_version": 1,
-        "name": name,
-        "page": int(page_info["physical_page"]),
+        "name": name if name is not None else previous.get("name"),
+        "page": anchor_page,
+        "source_pages": resolved_source_pages,
         "page_table_index": _table_index(output_dir),
-        "bbox": {
-            "coordinate_system": "pdfplumber_top_left",
-            "unit": "pt",
-            "approximate": True,
-            "x0": x0,
-            "top": top,
-            "x1": x1,
-            "bottom": bottom,
+        "bbox": accumulated[str(anchor_page)],
+        "page_bboxes": {
+            str(page): accumulated[str(page)] for page in resolved_source_pages
         },
     }
-    metadata_path = output_dir / "metadata.yaml"
     metadata_path.write_text(
         yaml.safe_dump(metadata, allow_unicode=True, sort_keys=False),
         encoding="utf-8",
@@ -151,7 +218,9 @@ def run_extractor(
     extractor: Extractor,
     *,
     name: str | None,
-    bbox: Sequence[float],
+    bbox: Sequence[float] | None = None,
+    source_pages: Sequence[int] | None = None,
+    page_bboxes: Mapping[str, Sequence[float]] | None = None,
 ) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--pdf", required=True, type=Path)
@@ -166,5 +235,7 @@ def run_extractor(
         output_dir=args.output_dir,
         name=name,
         bbox=bbox,
+        source_pages=source_pages,
+        page_bboxes=page_bboxes,
         spatial_check=args.spatial_check,
     )

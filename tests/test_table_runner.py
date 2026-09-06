@@ -6,9 +6,11 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
+import pdfplumber
 from PIL import Image
 
 from llmpdf.table.models import ExtractionJob, PreparedJob
+from llmpdf.table.orchestration import redact_prepared_page, run_dynamic_group
 from llmpdf.table.runner import (
     PiConfig,
     confirmed_group_attachments,
@@ -21,6 +23,7 @@ from llmpdf.table.runner import (
     pi_environment,
     prioritize_parse_groups,
     run_confirmed_group,
+    run_prepared_chain,
     run_prepared_job,
     run_prepared_jobs,
 )
@@ -67,6 +70,16 @@ class RunnerTest(unittest.TestCase):
             [[25, 26, 27], [28, 29], [30]],
         )
         self.assertIsNone(parse_merge_groups('{"groups": [[25, 27], [26]]}', [25, 26, 27]))
+        self.assertEqual(
+            parse_merge_groups(
+                '{"groups": [[5, 6, 7, 8], [8, 9, 10, 11]]}',
+                list(range(5, 12)),
+            ),
+            [[5, 6, 7, 8], [8, 9, 10, 11]],
+        )
+        self.assertIsNone(
+            parse_merge_groups('{"groups": [[5, 6, 7], [6, 7, 8]]}', [5, 6, 7, 8])
+        )
         self.assertTrue(parse_processed_pages('{"processed_pages": [25, 26]}', [25, 26]))
 
     def test_grouping_keeps_possible_continuations_in_one_chain(self) -> None:
@@ -141,7 +154,7 @@ class RunnerTest(unittest.TestCase):
             return {"status": "completed"}
 
         with (
-            patch("llmpdf.table.orchestration.run_prepared_chain", fake_chain),
+            patch("llmpdf.table.orchestration.run_dynamic_group", fake_chain),
             ThreadPoolExecutor(max_workers=2) as executor,
         ):
             results = run_prepared_jobs(
@@ -155,11 +168,95 @@ class RunnerTest(unittest.TestCase):
         self.assertLess(events.index("normal-start"), events.index("image-start"))
         self.assertLess(events.index("image-start"), events.index("cross-end"))
 
-    def test_confirmed_group_attaches_first_and_last_high_resolution_images(self) -> None:
+    def test_long_chain_is_planned_before_extraction(self) -> None:
+        def prepared(page: int) -> PreparedJob:
+            job = ExtractionJob(
+                Path("/tmp/source.pdf"),
+                page,
+                job_id=f"page-{page:04d}",
+                may_merge_with_previous=page > 1,
+            )
+            root = Path(f"/tmp/page-{page}")
+            return PreparedJob(
+                job,
+                root,
+                root / "page.pdf",
+                root / "page.png",
+                root / "prompt.md",
+                root / "agent-output",
+            )
+
+        group = [prepared(page) for page in (1, 2, 3)]
+        seen = []
+
+        def fake_chain(items, _config):
+            seen.append([item.job.page for item in items])
+            return {item.job.id: {"returncode": 0} for item in items}
+
+        with patch(
+            "llmpdf.table.orchestration.run_dynamic_group",
+            side_effect=fake_chain,
+        ) as dynamic:
+            run_prepared_jobs(group, PiConfig(keep_sessions=True), concurrency=1)
+
+        self.assertEqual(seen, [[1, 2, 3]])
+        dynamic.assert_called_once()
+
+    def test_chain_uses_fresh_session_per_continuation_page(self) -> None:
+        def prepared(page: int) -> PreparedJob:
+            root = Path(f"/tmp/page-{page}")
+            return PreparedJob(
+                ExtractionJob(
+                    Path("/tmp/source.pdf"),
+                    page,
+                    job_id=f"page-{page:04d}",
+                    may_merge_with_previous=page > 1,
+                ),
+                root,
+                root / "page.pdf",
+                root / "page.png",
+                root / "prompt.md",
+                root / "agent-output",
+            )
+
+        group = [prepared(page) for page in (1, 2, 3)]
+        sessions = []
+        working_dirs = []
+
+        def fake_pi(**kwargs):
+            sessions.append(kwargs["session"])
+            working_dirs.append(kwargs["working_dir"])
+            return {"returncode": 0, "last_message": '{"merge_with_previous": true}'}
+
+        with (
+            patch(
+                "llmpdf.table.orchestration.run_prepared_job",
+                return_value={"returncode": 0},
+            ) as initial,
+            patch("llmpdf.table.orchestration._continuation_assets", return_value=(Path("prompt"), [])),
+            patch("llmpdf.table.orchestration.run_pi", side_effect=fake_pi),
+        ):
+            run_prepared_chain(group, PiConfig(keep_sessions=True))
+
+        initial.assert_called_once_with(group[0].directory, PiConfig(keep_sessions=True))
+        self.assertEqual(
+            sessions,
+            [
+                group[1].directory / "continuation-session.jsonl",
+                group[2].directory / "continuation-session.jsonl",
+            ],
+        )
+        self.assertEqual(working_dirs, [group[0].agent_output, group[0].agent_output])
+
+    def test_confirmed_group_attaches_first_second_and_last_high_resolution_images(self) -> None:
         page_images = [Path(f"page_{page:04d}_dynamic.png") for page in range(25, 30)]
         self.assertEqual(
             confirmed_group_attachments(page_images),
-            [Path("page_0025_dynamic.png"), Path("page_0029_dynamic.png")],
+            [
+                Path("page_0025_dynamic.png"),
+                Path("page_0026_dynamic.png"),
+                Path("page_0029_dynamic.png"),
+            ],
         )
 
     def test_confirmed_group_uses_one_parse_call_and_records_covered_pages(self) -> None:
@@ -211,7 +308,93 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual(metrics["pages"], [25, 26, 27])
             self.assertFalse((prepared[0].directory / "pi.jsonl").exists())
             self.assertTrue(any(value.endswith("/assets/page_0025_dynamic.png") for value in invoked))
+            self.assertTrue(any(value.endswith("/assets/page_0026_dynamic.png") for value in invoked))
             self.assertTrue(any(value.endswith("/assets/page_0027_dynamic.png") for value in invoked))
+
+    def test_overlapping_groups_run_in_order_and_clean_the_last_page(self) -> None:
+        def prepared(page: int) -> PreparedJob:
+            root = Path(f"/tmp/page-{page}")
+            return PreparedJob(
+                ExtractionJob(Path("/tmp/source.pdf"), page, job_id=f"page-{page:04d}"),
+                root,
+                root / "page.pdf",
+                root / "page.png",
+                root / "prompt.md",
+                root / "agent-output",
+            )
+
+        chain = [prepared(page) for page in range(5, 12)]
+        by_page = {item.job.page: item for item in chain}
+        planned = [
+            [by_page[page] for page in (5, 6, 7, 8)],
+            [by_page[page] for page in (8, 9, 10, 11)],
+        ]
+        events = []
+
+        def extract(items, _config):
+            events.append(("extract", [item.job.page for item in items]))
+            return {item.job.id: {"returncode": 0} for item in items}
+
+        def redact(item, _bboxes):
+            events.append(("redact", item.job.page))
+
+        with (
+            patch("llmpdf.table.orchestration.plan_long_chain", return_value=planned),
+            patch("llmpdf.table.orchestration.run_confirmed_group", side_effect=extract),
+            patch("llmpdf.table.orchestration.run_prepared_chain", side_effect=extract),
+            patch("llmpdf.table.orchestration._boundary_bboxes", return_value=[(0, 0, 10, 10)]),
+            patch("llmpdf.table.orchestration.redact_prepared_page", side_effect=redact),
+        ):
+            run_dynamic_group(chain, PiConfig(keep_sessions=True))
+
+        self.assertEqual(
+            events,
+            [
+                ("extract", [5, 6, 7, 8]),
+                ("redact", 8),
+                ("extract", [8, 9, 10, 11]),
+                ("redact", 11),
+                ("extract", [11]),
+            ],
+        )
+
+    def test_redaction_whites_png_and_replaces_pdf_with_the_masked_page(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            assets = root / "assets"
+            assets.mkdir()
+            image_path = assets / "page_0008_dynamic.png"
+            pdf_path = assets / "page_0008.pdf"
+            Image.new("RGB", (100, 100), "black").save(image_path)
+            pdf_path.touch()
+            (assets / "page_info.json").write_text(
+                json.dumps(
+                    {
+                        "physical_page": 8,
+                        "scale_x": 1,
+                        "scale_y": 1,
+                        "full_dpi": 72,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            item = PreparedJob(
+                ExtractionJob(Path("/tmp/source.pdf"), 8),
+                root,
+                pdf_path,
+                image_path,
+                root / "prompt.md",
+                root / "agent-output",
+            )
+
+            redact_prepared_page(item, [(0, 0, 100, 40)])
+
+            with Image.open(image_path) as image:
+                self.assertEqual(image.getpixel((50, 20)), (255, 255, 255))
+                self.assertEqual(image.getpixel((50, 80)), (0, 0, 0))
+            with pdfplumber.open(pdf_path) as pdf:
+                self.assertAlmostEqual(pdf.pages[0].width, 100, places=1)
+                self.assertEqual(pdf.pages[0].chars, [])
 
     def test_pi_environment_forces_sse_without_changing_source_settings(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

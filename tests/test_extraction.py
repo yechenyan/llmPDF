@@ -54,6 +54,27 @@ def test_continuation_groups_read_batched_decisions(tmp_path) -> None:
     ]
 
 
+def test_continuation_groups_preserve_planner_boundary_overlap(tmp_path) -> None:
+    directory = tmp_path / "page-0005"
+    directory.mkdir()
+    (directory / "merge_plan.json").write_text(
+        json.dumps(
+            {
+                "groups": [
+                    [5, 6, 7, 8],
+                    [8, 9, 10, 11],
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    jobs = [{"page": page} for page in range(5, 12)]
+    assert continuation_groups(tmp_path, jobs) == [
+        {"leader_page": 5, "pages": [5, 6, 7, 8]},
+        {"leader_page": 8, "pages": [8, 9, 10, 11]},
+    ]
+
+
 def test_default_extraction_uses_bundled_engine(tmp_path: Path, monkeypatch) -> None:
     pdf = tmp_path / "input.pdf"
     pdf.write_bytes(b"%PDF-test")

@@ -7,6 +7,7 @@ from llmpdf.merge_task import (
     choose_docling_table,
     collect_direct_table_relations,
     insertion_order,
+    is_numbered_section_title,
     mapped_continuation_block_ids,
     materialize_docling_tables,
     normalize_table_insertions,
@@ -45,6 +46,15 @@ def test_insertion_order_uses_absorbed_content_first() -> None:
 def test_normalized_text_supports_caption_deduplication() -> None:
     assert normalized_text("**Tabelle 1:  Example**") == normalized_text(
         "Tabelle 1: Example"
+    )
+
+
+def test_numbered_section_title_requires_a_dotted_prefix() -> None:
+    assert is_numbered_section_title(
+        "4.2.2.1 Aggregierte Maßnahmentabelle Stadtgebiet Göttingen"
+    )
+    assert not is_numbered_section_title(
+        "Tabelle 11: Aggregierte Maßnahmentabelle Stadtgebiet Göttingen"
     )
 
 
@@ -90,6 +100,7 @@ def test_public_table_metadata_hides_work_paths() -> None:
             "id": "table-0001",
             "page": 1,
             "source_pages": [1, 2],
+            "page_bboxes": {"1": {"x0": 1, "top": 2, "x1": 3, "bottom": 4}},
             "csv": "assets/tables/table-0001.csv",
             "internal": {"markdown": "work/table-assets/table-0001/table.md"},
             "merge": {"action": "replaced_docling_table"},
@@ -99,6 +110,7 @@ def test_public_table_metadata_hides_work_paths() -> None:
     assert "internal" not in public
     assert public["csv"].startswith("assets/")
     assert public["source_pages"] == [1, 2]
+    assert "1" in public["page_bboxes"]
     assert public["lineage"]["action"] == "replaced_docling_table"
 
 
@@ -155,6 +167,21 @@ def test_lineage_attaches_continuation_to_merged_table() -> None:
         "docling-table-0002",
     ]
     assert source[1]["status"] == "absorbed_into_merged_table"
+
+
+def test_lineage_uses_the_bbox_for_the_continuation_page() -> None:
+    merged = table("table-0001", 1, [1, 2], BBox(0, 10, 100, 100))
+    merged["page_bboxes"] = {
+        "1": BBox(0, 10, 100, 100).to_dict(),
+        "2": BBox(300, 20, 400, 120).to_dict(),
+    }
+    continuation = block(
+        "#/tables/continuation", 2, "table", BBox(300, 20, 400, 120), page=2
+    )
+
+    lineage, _source = build_table_lineage([merged], [continuation], {})
+
+    assert lineage["table-0001"]["relations"][0]["block_id"] == continuation.id
 
 
 def test_lineage_does_not_force_ambiguous_continuation() -> None:
@@ -305,3 +332,68 @@ def test_merge_outputs_only_selected_physical_pages(tmp_path: Path) -> None:
     assert "<!-- page:1 -->" not in markdown
     assert metadata["source"]["page_count"] == 5
     assert metadata["source"]["selected_pages"] == [2, 4]
+
+
+def test_merge_preserves_numbered_heading_when_ai_replaces_table(tmp_path: Path) -> None:
+    pdf = tmp_path / "input.pdf"
+    pdf.write_bytes(b"%PDF-test")
+    config = PipelineConfig(pdf=pdf, output_dir=tmp_path / "out")
+    heading = "4.2.2.1 Aggregierte Maßnahmentabelle Stadtgebiet Göttingen"
+    blocks = [
+        DocumentBlock(
+            "source-table",
+            1,
+            10,
+            "table",
+            f"{heading}\n\n| A |\n|---|\n| 1 |",
+            BBox(0, 20, 100, 100),
+        ),
+        DocumentBlock(
+            "source-heading",
+            1,
+            9,
+            "caption",
+            heading,
+            BBox(0, 10, 100, 20),
+        ),
+    ]
+    write_json(
+        config.work_dir / "docling" / "blocks.json",
+        {"page_count": 1, "blocks": [value.to_dict() for value in blocks]},
+    )
+    table_markdown = config.work_dir / "table-assets" / "table-0001" / "table.md"
+    table_markdown.parent.mkdir(parents=True)
+    table_markdown.write_text(
+        "**Aggregierte Maßnahmentabelle Stadtgebiet Göttingen**\n\n"
+        "| A |\n|---|\n| 1 |\n",
+        encoding="utf-8",
+    )
+    write_json(
+        config.work_dir / "table-assets" / "tables.json",
+        {
+            "tables": [
+                {
+                    "id": "table-0001",
+                    "page": 1,
+                    "source_pages": [1],
+                    "page_table_index": 1,
+                    "bbox": BBox(0, 20, 100, 100).to_dict(),
+                    "internal": {"markdown": "work/table-assets/table-0001/table.md"},
+                }
+            ]
+        },
+    )
+    write_json(
+        config.work_dir / "image-analysis" / "images.json",
+        {"images": [], "ignored_picture_blocks": []},
+    )
+    write_json(config.work_dir / "candidate-pages.json", {"pages": [], "sources": {}})
+
+    MergeMarkdownTask().run(config)
+
+    markdown = (config.output_dir / "output.md").read_text(encoding="utf-8")
+    assert f"### {heading}" in markdown
+    assert "<!-- table:table-0001 page:1 -->" in markdown
+    assert markdown.index(f"### {heading}") < markdown.index(
+        "<!-- table:table-0001 page:1 -->"
+    )

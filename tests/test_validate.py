@@ -75,3 +75,59 @@ def test_validation_accepts_non_contiguous_selected_pages(tmp_path: Path) -> Non
 
     result = ValidateTask().run(config)
     assert result.status == "completed"
+
+
+def test_validation_accepts_pages_absorbed_by_a_multi_page_table(
+    tmp_path: Path,
+) -> None:
+    config = PipelineConfig(pdf=tmp_path / "input.pdf", output_dir=tmp_path / "out")
+    config.output_dir.mkdir()
+    config.assets_dir.mkdir()
+    (config.output_dir / "output.md").write_text(
+        "<!-- page:1 -->\n\n<!-- table:table-0001 page:1 -->\n\n"
+        "| A |\n|---|\n| value |\n\n"
+        "<!-- /table:table-0001 page:3 -->\n\n"
+        "<!-- pages:2-3 merged-into:table-0001 -->\n",
+        encoding="utf-8",
+    )
+    table_csv = config.assets_dir / "tables" / "table-0001.csv"
+    table_csv.parent.mkdir()
+    table_csv.write_text("A\nvalue\n", encoding="utf-8")
+    write_json(
+        config.assets_dir / "metadata.json",
+        {
+            "schema_version": 3,
+            "source": {"page_count": 3, "selected_pages": [1, 2, 3]},
+            "tables": [
+                {
+                    "id": "table-0001",
+                    "page": 1,
+                    "source_pages": [1, 2, 3],
+                    "page_table_index": 1,
+                    "bbox": {"top": 10},
+                    "csv": "assets/tables/table-0001.csv",
+                    "merge": {
+                        "action": "replaced_docling_table",
+                        "matched_block": "block-1",
+                        "overlap": 0.9,
+                    },
+                    "lineage": {
+                        "action": "replaced_docling_table",
+                        "docling_table_ids": ["docling-table-0001"],
+                        "relations": [
+                            {"docling_table_id": "docling-table-0001"}
+                        ],
+                    },
+                }
+            ],
+            "docling_tables": [],
+            "images": [],
+        },
+    )
+
+    result = ValidateTask().run(config)
+    report = read_json(config.work_dir / "diagnostics" / "validation.json")
+
+    assert result.status == "completed"
+    assert report["status"] == "passed"
+    assert report["page_count"] == 3

@@ -284,6 +284,11 @@ def build_parser() -> argparse.ArgumentParser:
     review_parser.add_argument("--host", default="127.0.0.1")
     review_parser.add_argument("--port", type=int, default=8765)
     review_parser.add_argument("--no-open", action="store_true")
+    review_parser.add_argument(
+        "--reload",
+        action="store_true",
+        help="Reload the review server when Python source files change",
+    )
     rerun_parser = subparsers.add_parser(
         "rerun-tables",
         help="Regenerate tables from a successful minimal result directory",
@@ -370,6 +375,8 @@ def main() -> None:
                 host=args.host,
                 port=args.port,
                 open_browser=not args.no_open,
+                reload=args.reload,
+                roots=roots,
             )
         except (OSError, ValueError, TypeError, RuntimeError, KeyError) as error:
             print(

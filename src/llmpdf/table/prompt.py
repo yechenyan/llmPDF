@@ -34,6 +34,14 @@ def build_extraction_prompt(
     if grouped and confirmed_group_page_infos is not None and len(confirmed_group_page_infos) != len(pages):
         raise ValueError("Each confirmed group page requires page information")
     page_list = ", ".join(str(value) for value in pages)
+    layout_pages = list(dict.fromkeys((pages[0], pages[min(1, len(pages) - 1)], pages[-1])))
+    layout_page_list = ", ".join(str(value) for value in layout_pages)
+    layout_names = "first and last" if len(pages) == 2 else "first, middle, and last"
+    bbox_roles = ['       "first": (0.0, 0.0, 0.0, 0.0),']
+    if len(pages) > 2:
+        bbox_roles.append('       "middle": (0.0, 0.0, 0.0, 0.0),')
+    bbox_roles.append('       "last": (0.0, 0.0, 0.0, 0.0),')
+    bbox_role_lines = "\n".join(bbox_roles)
     task = (
         f"Task: faithfully extract the tables on pages {pages[0]}–{pages[-1]} of the PDF as CSV."
         if grouped
@@ -42,24 +50,16 @@ def build_extraction_prompt(
     group_instructions = ""
     if grouped:
         group_instructions = f'''
-## Confirmed cross-page relationship
+## Confirmed cross-page table
 
-The continuous main tables on pages [{page_list}] have been confirmed as one mergeable table.
+Pages [{page_list}] contain one continuous table. The first page may be partially white because earlier content was already processed; ignore white regions.
 
-1. Write extract.py once and read the single-page PDFs for pages [{page_list}] from ../assets in page order.
-2. Merge the continuous main table into one CSV, keeping the header only once. Do not create a separate table for each page.
-3. Use page {pages[0]} to determine the header and column structure. Check later pages for changes in column boundaries, header position, and row rules; handle any changes separately within the same extract.py.
+Extract visible independent tables on the first page and the continuous table across this group. Merge the continuous table into one CSV with one header. On the last page, stop at the end of the continuous table and ignore everything below it.
 
-Prefer batch extraction when accuracy permits. First compare table geometry across pages. If column boundaries and row rules match, reuse one configuration and assign page text to rows and columns by coordinates after reading it in a single pass whenever possible. Use separate `crop()` checks only for pages with layout changes, cross-boundary text, or difficult cells. During validation, output only per-page row counts, first and last records, total column count, and a small number of anomalous samples.
-
-4. High-resolution full-page images of pages {pages[0]} and {pages[-1]} are attached. PDFs, high-resolution images, and page information for all other pages are available in ../assets if needed.
-5. If these pages contain independent tables that do not belong to the continuous main table, create separate tables for them.
-6. When finished, run the shared batch command below once and check the column count, single header, first and last records on each page, and total row count.
-
-Do not begin by processing only page {pages[0]}, and do not emit continuation pages as separate tables.
+Images of pages {layout_page_list} represent the {layout_names} layouts. For the continuous table, set `SOURCE_PAGES` and `PAGE_BBOXES` using those layouts. All group PDFs, images, and page information are available in `../assets`.
 '''
     image_workflow = (
-        "Inspect the attached full-page images of the first and last pages"
+        f"Inspect the attached full-page images of the {layout_names} layouts"
         if grouped
         else "Inspect the attached full-page image"
     )
@@ -68,7 +68,7 @@ Do not begin by processing only page {pages[0]}, and do not emit continuation pa
         f"- Single-page PDF: {assets / f'page_{value:04d}.pdf'}" for value in pages
     )
     image_input = (
-        f"- Full-page images: pages {pages[0]} and {pages[-1]} are attached directly to this prompt"
+        f"- Full-page images: pages {layout_page_list} are attached directly to this prompt"
         if grouped
         else "- Full-page image: attached directly to this prompt"
     )
@@ -76,6 +76,68 @@ Do not begin by processing only page {pages[0]}, and do not emit continuation pa
         confirmed_group_page_infos
         if grouped and confirmed_group_page_infos is not None
         else page_info
+    )
+    bbox_instruction = (
+        "2. Set `SOURCE_PAGES` to every physical page occupied by the table and set "
+        "`PAGE_BBOXES` for its first, middle, and last layouts. A single-page table "
+        "uses only `first`; a two-page table uses `first` and `last`."
+        if grouped
+        else "2. Set `TABLE_BBOX` to the approximate region containing the title, header, and data area. Use pdfplumber's top-left coordinate system in points. It need not be exact, but it must not include adjacent tables."
+    )
+    extractor_template = (
+        f'''   ```python
+   from pathlib import Path
+
+   import pdfplumber
+
+   from llmpdf.table.runtime import run_extractor
+
+
+   TABLE_NAME: str | None = None
+   SOURCE_PAGES = [{page_list}]
+   PAGE_BBOXES = {{
+{bbox_role_lines}
+   }}
+
+
+   def extract_table(pdf_path: Path, output_dir: Path) -> None:
+       # Extract the table here and write output_1.csv.
+       pass
+
+
+   if __name__ == "__main__":
+       run_extractor(
+           extract_table,
+           name=TABLE_NAME,
+           source_pages=SOURCE_PAGES,
+           page_bboxes=PAGE_BBOXES,
+       )
+   ```'''
+        if grouped
+        else '''   ```python
+   from pathlib import Path
+
+   import pdfplumber
+
+   from llmpdf.table.runtime import run_extractor
+
+
+   TABLE_NAME: str | None = None
+   TABLE_BBOX = (0.0, 0.0, 0.0, 0.0)
+
+
+   def extract_table(pdf_path: Path, output_dir: Path) -> None:
+       # Extract the table here and write output_1.csv.
+       pass
+
+
+   if __name__ == "__main__":
+       run_extractor(
+           extract_table,
+           name=TABLE_NAME,
+           bbox=TABLE_BBOX,
+       )
+   ```'''
     )
     prompt = f'''{task}
 
@@ -119,36 +181,13 @@ Each `extract.py` handles exactly one corresponding table and can run independen
 
 Inside `extract.py`:
 
-1. Set `TABLE_NAME` to the table title explicitly shown on the page. If no title is shown, use `None`; do not invent a name.
-2. Set `TABLE_BBOX` to the approximate region containing the title, header, and data area. Use pdfplumber's top-left coordinate system in points. It need not be exact, but it must not include adjacent tables.
+1. Set `TABLE_NAME` to the table title explicitly shown on the page. Titles inside the table border must also remain in the CSV as header rows, repeating merged cells as required. If no title is shown, use `None`; do not invent a name.
+{bbox_instruction}
 3. Extract the table in `extract_table()` and write `output_1.csv`.
 4. Run the extractor through the shared `run_extractor()` function.
 
    Use this code template:
-   ```python
-   from pathlib import Path
-
-   import pdfplumber
-
-   from llmpdf.table.runtime import run_extractor
-
-
-   TABLE_NAME: str | None = None
-   TABLE_BBOX = (0.0, 0.0, 0.0, 0.0)
-
-
-   def extract_table(pdf_path: Path, output_dir: Path) -> None:
-       # Extract the table here and write output_1.csv.
-       pass
-
-
-   if __name__ == "__main__":
-       run_extractor(
-           extract_table,
-           name=TABLE_NAME,
-           bbox=TABLE_BBOX,
-       )
-   ```
+{extractor_template}
 
 ## Task inputs
 
@@ -217,18 +256,26 @@ Do not treat abbreviation lists, glossaries, tables of contents, contact lists, 
 
 def build_merge_plan_prompt(pages: list[int]) -> str:
     example = ", ".join(str(page) for page in pages)
+    overlap_example = ""
+    if len(pages) >= 3:
+        boundary = len(pages) // 2
+        left = ", ".join(str(page) for page in pages[: boundary + 1])
+        right = ", ".join(str(page) for page in pages[boundary:])
+        overlap_example = f'''If page {pages[boundary]} is a transition page:
+{{"groups": [[{left}], [{right}]]}}
+'''
     return f'''Task: determine only how the main tables on consecutive candidate pages should merge across pages.
 
 Low-resolution full-page images are attached in page-number order. Make a visual decision only. Do not call tools, extract data, or create or modify files.
 
 1. Compare the title, column structure, width, and row flow of tables on adjacent pages.
-2. Put adjacent pages that can merge into one group; start a new group when they cannot merge.
-3. Do not merge when uncertain.
-4. Every page number must appear exactly once, and page order must not change.
+2. Return one continuous page group for each cross-page table.
+3. Adjacent groups may share one boundary page when that page contains the end of one table and the start of another. No other overlap is allowed.
+4. Every candidate page must appear at least once. Keep pages and groups in reading order. Do not merge when uncertain.
 
 Return JSON only. For example, if all pages merge:
 {{"groups": [[{example}]]}}
-'''
+{overlap_example}'''
 
 
 def build_confirmed_group_prompt(

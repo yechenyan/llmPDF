@@ -126,11 +126,25 @@ class CollectAssetsTask(PipelineTask):
                 encoding="utf-8",
             )
 
-            bbox_data = metadata["bbox"]
+            raw_page_bboxes = metadata.get("page_bboxes") or {}
+            page_bboxes = {
+                str(int(physical_page)): {
+                    "coordinate_system": "pdfplumber_top_left",
+                    "unit": "pt",
+                    **BBox.from_dict(value).to_dict(),
+                }
+                for physical_page, value in raw_page_bboxes.items()
+            }
+            if page_bboxes:
+                source_pages = sorted(int(value) for value in page_bboxes)
+                page = source_pages[0]
+                bbox_data = page_bboxes[str(page)]
+            else:
+                bbox_data = metadata["bbox"]
+                source_pages = [
+                    int(value) for value in metadata.get("source_pages", [page])
+                ]
             bbox = BBox.from_dict(bbox_data)
-            source_pages = [
-                int(value) for value in metadata.get("source_pages", [page])
-            ]
             if source_pages == [page] and page in continuation_by_leader:
                 anchored = [
                     item
@@ -153,6 +167,7 @@ class CollectAssetsTask(PipelineTask):
                     "unit": "pt",
                     **bbox.to_dict(),
                 },
+                "page_bboxes": page_bboxes,
                 "csv": relativize(primary_csv, config.output_dir),
                 "extra_csvs": [
                     relativize(path, config.output_dir) for path in extra_csvs
