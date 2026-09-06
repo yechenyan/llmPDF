@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -17,6 +18,15 @@ from .prompt import build_extraction_prompt
 DEFAULT_TARGET_SMALL_TEXT_PX = 12
 DEFAULT_MAX_IMAGE_PATCHES = 30_000
 IMAGE_PATCH_SIZE = 32
+
+
+def write_python_wrapper(path: Path, python_executable: Path) -> None:
+    path.unlink(missing_ok=True)
+    path.write_text(
+        f"#!/bin/sh\nexec {shlex.quote(str(python_executable.absolute()))} \"$@\"\n",
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
 
 
 def percentile(values: list[float], fraction: float) -> float:
@@ -185,8 +195,7 @@ def prepare_job(
     tools.mkdir(parents=True, exist_ok=True)
 
     python_link = tools / "python"
-    if not python_link.exists():
-        python_link.symlink_to(python_executable.resolve())
+    write_python_wrapper(python_link, python_executable)
     reader = PdfReader(job.pdf)
     if job.page < 1 or job.page > len(reader.pages):
         raise ValueError(f"Page {job.page} is outside PDF page range 1-{len(reader.pages)}")

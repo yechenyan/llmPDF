@@ -305,6 +305,7 @@ def test_completed_find_batch_releases_table_work_before_other_find_finishes(
     monkeypatch.setattr(
         "llmpdf.table.orchestration.run_dynamic_group", fake_dynamic_group
     )
+    monkeypatch.setattr("llmpdf.table.orchestration.preflight_python", lambda _path: None)
 
     with PriorityAgentExecutor(max_workers=2) as scheduler:
         config.agent_executor = scheduler

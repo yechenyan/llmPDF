@@ -12,6 +12,7 @@ class PromptTest(unittest.TestCase):
     def test_paths_and_clean_runtime_template(self) -> None:
         prompt = build_extraction_prompt(16, "the only table on this page", {"physical_page": 16})
         self.assertIn("Task: faithfully extract the tables on the specified PDF page as CSV.", prompt)
+        self.assertIn("Ignore regions marked `IGNORE`", prompt)
         self.assertIn("../assets/page_0016.pdf", prompt)
         self.assertIn("../tools/python", prompt)
         self.assertIn("Output directory: .", prompt)
@@ -54,6 +55,8 @@ class PromptTest(unittest.TestCase):
         planning = build_merge_plan_prompt([25, 26, 27])
         self.assertIn('"groups"', planning)
         self.assertIn("Do not call tools", planning)
+        self.assertIn("Contact sheets", planning)
+        self.assertIn("PDF page number", planning)
         parsing = build_confirmed_group_prompt(
             [25, 26, 27],
             "all real data tables",

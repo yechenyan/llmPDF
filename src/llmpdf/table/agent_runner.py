@@ -138,7 +138,7 @@ def run_pi(
     timed_out = False
     try:
         with pi_environment(config) as environment:
-            package_root = str(Path(__file__).resolve().parents[1])
+            package_root = str(Path(__file__).resolve().parents[2])
             existing_python_path = environment.get("PYTHONPATH", "")
             environment["PYTHONPATH"] = os.pathsep.join(
                 value for value in (package_root, existing_python_path) if value

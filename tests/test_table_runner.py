@@ -1,4 +1,6 @@
 import json
+import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -10,7 +12,13 @@ import pdfplumber
 from PIL import Image
 
 from llmpdf.table.models import ExtractionJob, PreparedJob
-from llmpdf.table.orchestration import redact_prepared_page, run_dynamic_group
+from llmpdf.table.orchestration import (
+    build_contact_sheets,
+    preflight_python,
+    redact_prepared_page,
+    run_dynamic_group,
+)
+from llmpdf.table.prepare import write_python_wrapper
 from llmpdf.table.runner import (
     PiConfig,
     confirmed_group_attachments,
@@ -30,6 +38,38 @@ from llmpdf.table.runner import (
 
 
 class RunnerTest(unittest.TestCase):
+    def test_merge_planner_contact_sheets_group_twelve_pages(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pages = list(range(1, 14))
+            overviews = []
+            for page in pages:
+                path = root / f"page-{page}.png"
+                Image.new("RGB", (1123, 794), "white").save(path)
+                overviews.append(path)
+
+            sheets = build_contact_sheets(overviews, pages, root)
+
+            self.assertEqual([path.name for path in sheets], [
+                "merge-plan-contact-001.png",
+                "merge-plan-contact-002.png",
+            ])
+            with Image.open(sheets[0]) as image:
+                self.assertEqual(image.width, 1548)
+
+    def test_python_wrapper_preserves_virtual_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            wrapper = Path(directory) / "python"
+            write_python_wrapper(wrapper, Path(sys.executable))
+            completed = subprocess.run(
+                [str(wrapper), "-c", "import sys; print(sys.prefix)"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            preflight_python(wrapper)
+        self.assertEqual(Path(completed.stdout.strip()), Path(sys.prefix))
+
     def test_content_text(self) -> None:
         self.assertEqual(
             content_text([{"type": "text", "text": "first"}, {"type": "text", "text": "second"}]),
@@ -155,6 +195,7 @@ class RunnerTest(unittest.TestCase):
 
         with (
             patch("llmpdf.table.orchestration.run_dynamic_group", fake_chain),
+            patch("llmpdf.table.orchestration.preflight_python"),
             ThreadPoolExecutor(max_workers=2) as executor,
         ):
             results = run_prepared_jobs(
@@ -193,10 +234,13 @@ class RunnerTest(unittest.TestCase):
             seen.append([item.job.page for item in items])
             return {item.job.id: {"returncode": 0} for item in items}
 
-        with patch(
-            "llmpdf.table.orchestration.run_dynamic_group",
-            side_effect=fake_chain,
-        ) as dynamic:
+        with (
+            patch(
+                "llmpdf.table.orchestration.run_dynamic_group",
+                side_effect=fake_chain,
+            ) as dynamic,
+            patch("llmpdf.table.orchestration.preflight_python"),
+        ):
             run_prepared_jobs(group, PiConfig(keep_sessions=True), concurrency=1)
 
         self.assertEqual(seen, [[1, 2, 3]])
@@ -358,7 +402,7 @@ class RunnerTest(unittest.TestCase):
             ],
         )
 
-    def test_redaction_whites_png_and_replaces_pdf_with_the_masked_page(self) -> None:
+    def test_redaction_marks_png_and_preserves_pdf(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             assets = root / "assets"
@@ -366,7 +410,7 @@ class RunnerTest(unittest.TestCase):
             image_path = assets / "page_0008_dynamic.png"
             pdf_path = assets / "page_0008.pdf"
             Image.new("RGB", (100, 100), "black").save(image_path)
-            pdf_path.touch()
+            pdf_path.write_bytes(b"%PDF-original")
             (assets / "page_info.json").write_text(
                 json.dumps(
                     {
@@ -390,11 +434,9 @@ class RunnerTest(unittest.TestCase):
             redact_prepared_page(item, [(0, 0, 100, 40)])
 
             with Image.open(image_path) as image:
-                self.assertEqual(image.getpixel((50, 20)), (255, 255, 255))
+                self.assertNotEqual(image.getpixel((95, 35)), (0, 0, 0))
                 self.assertEqual(image.getpixel((50, 80)), (0, 0, 0))
-            with pdfplumber.open(pdf_path) as pdf:
-                self.assertAlmostEqual(pdf.pages[0].width, 100, places=1)
-                self.assertEqual(pdf.pages[0].chars, [])
+            self.assertEqual(pdf_path.read_bytes(), b"%PDF-original")
 
     def test_pi_environment_forces_sse_without_changing_source_settings(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

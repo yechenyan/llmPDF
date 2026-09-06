@@ -331,12 +331,15 @@ class DetectTablesTask(PipelineTask):
         executor = config.agent_executor or owned_executor
         assert executor is not None
 
+        python_preflighted = False
+
         def schedule_ready_tables() -> None:
+            nonlocal python_preflighted
             if not config.dynamic_agent_scheduling:
                 return
             from llmpdf.table.agent_runner import PiConfig
             from llmpdf.table.models import ExtractionJob
-            from llmpdf.table.orchestration import run_dynamic_group
+            from llmpdf.table.orchestration import preflight_python, run_dynamic_group
             from llmpdf.table.prepare import prepare_job
 
             from .extraction_task import TABLE_EXTRACTION_TARGET
@@ -390,6 +393,9 @@ class DetectTablesTask(PipelineTask):
                     )
                     config.early_table_jobs[page] = item
                     prepared.append(item)
+                if not python_preflighted:
+                    preflight_python(prepared[0].directory / "tools" / "python")
+                    python_preflighted = True
                 kind = "cross_table" if len(pages) > 1 else "table"
                 label = (
                     f"pages {pages[0]}-{pages[-1]}"

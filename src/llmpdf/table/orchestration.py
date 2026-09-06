@@ -3,14 +3,16 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import subprocess
 import time
 from collections.abc import Callable
 from concurrent.futures import Executor, Future, ThreadPoolExecutor, as_completed
 from itertools import pairwise
+from math import ceil
 from pathlib import Path
 
 import yaml
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from .agent_runner import PiConfig, run_pi, run_prepared_job
 from .io_utils import write_json
@@ -117,12 +119,61 @@ def _copy_group_assets(leader: PreparedJob, group: list[PreparedJob]) -> list[Pa
     return overviews
 
 
+def build_contact_sheets(
+    overviews: list[Path], pages: list[int], assets: Path
+) -> list[Path]:
+    sheets = []
+    columns = 3
+    pages_per_sheet = 12
+    thumb_size = (500, 650)
+    padding = 12
+    label_height = 24
+    for sheet_index in range(0, len(overviews), pages_per_sheet):
+        chunk = list(
+            zip(
+                pages[sheet_index : sheet_index + pages_per_sheet],
+                overviews[sheet_index : sheet_index + pages_per_sheet],
+                strict=True,
+            )
+        )
+        thumbnails = []
+        for page, path in chunk:
+            with Image.open(path) as image:
+                thumbnail = image.convert("RGB")
+                thumbnail.thumbnail(thumb_size, Image.Resampling.LANCZOS)
+            thumbnails.append((page, thumbnail))
+        cell_height = max(image.height for _page, image in thumbnails) + label_height
+        rows = ceil(len(thumbnails) / columns)
+        sheet = Image.new(
+            "RGB",
+            (
+                columns * thumb_size[0] + (columns + 1) * padding,
+                rows * cell_height + (rows + 1) * padding,
+            ),
+            "white",
+        )
+        draw = ImageDraw.Draw(sheet)
+        for index, (page, thumbnail) in enumerate(thumbnails):
+            row, column = divmod(index, columns)
+            x = padding + column * (thumb_size[0] + padding)
+            y = padding + row * (cell_height + padding)
+            draw.text((x, y), f"Page {page}", fill="black")
+            sheet.paste(thumbnail, (x, y + label_height))
+        target = assets / f"merge-plan-contact-{sheet_index // pages_per_sheet + 1:03d}.png"
+        sheet.save(target, format="PNG", optimize=True)
+        sheets.append(target)
+    return sheets
+
+
 def plan_long_chain(
     chain: list[PreparedJob], config: PiConfig
 ) -> list[list[PreparedJob]]:
     leader = chain[0]
     pages = [item.job.page for item in chain]
     overviews = _copy_group_assets(leader, chain)
+    contact_sheets = build_contact_sheets(
+        overviews, pages, leader.directory / "assets"
+    )
     prompt = leader.directory / "merge_plan_prompt.md"
     prompt.write_text(build_merge_plan_prompt(pages), encoding="utf-8")
     work = leader.directory / "merge-plan-agent-output"
@@ -133,7 +184,7 @@ def plan_long_chain(
             job_dir=leader.directory,
             working_dir=work,
             prompt=prompt,
-            attachments=overviews,
+            attachments=contact_sheets,
             log=leader.directory / "merge_plan_pi.jsonl",
             session=session,
             config=config,
@@ -250,7 +301,7 @@ def redact_prepared_page(
     prepared: PreparedJob,
     bboxes: list[tuple[float, float, float, float]],
 ) -> None:
-    """Replace consumed regions in one task's PNG and PDF with white pixels."""
+    """Mark consumed regions in the task image while preserving the source PDF."""
     page_info = json.loads(
         (prepared.directory / "assets" / "page_info.json").read_text(encoding="utf-8")
     )
@@ -259,17 +310,22 @@ def redact_prepared_page(
     with Image.open(prepared.page_image) as source:
         image = source.convert("RGB")
     draw = ImageDraw.Draw(image)
+    font = ImageFont.load_default(size=24)
     for x0, top, x1, bottom in bboxes:
+        rectangle = (x0 * scale_x, top * scale_y, x1 * scale_x, bottom * scale_y)
         draw.rectangle(
-            (x0 * scale_x, top * scale_y, x1 * scale_x, bottom * scale_y),
-            fill="white",
+            rectangle,
+            fill="#e5e5e5",
+            outline="#666666",
+            width=2,
+        )
+        draw.text(
+            (rectangle[0] + 8, rectangle[1] + 8),
+            "IGNORE",
+            fill="#333333",
+            font=font,
         )
     image.save(prepared.page_image, format="PNG", optimize=True)
-    image.save(
-        prepared.single_page_pdf,
-        format="PDF",
-        resolution=float(page_info["full_dpi"]),
-    )
     write_json(
         prepared.directory / "redaction.json",
         {"page": prepared.job.page, "bboxes": bboxes},
@@ -397,6 +453,20 @@ def prioritize_parse_groups(
     return sorted(planned, key=priority)
 
 
+def preflight_python(python: Path) -> None:
+    subprocess.run(
+        [
+            str(python),
+            "-c",
+            "import llmpdf.table.run_all, pdfplumber, pypdf, yaml",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+
+
 def run_prepared_jobs(
     prepared: list[PreparedJob],
     config: PiConfig,
@@ -408,6 +478,7 @@ def run_prepared_jobs(
 ) -> dict:
     if not prepared:
         raise ValueError("No prepared jobs to run")
+    preflight_python(prepared[0].directory / "tools" / "python")
     started = time.time()
     results: dict[str, object] = {}
     chains = group_prepared_jobs(prepared)

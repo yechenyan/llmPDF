@@ -142,6 +142,7 @@ Images of pages {layout_page_list} represent the {layout_names} layouts. For the
     prompt = f'''{task}
 
 Base all decisions only on the PDF, full-page images, page information, and current outputs supplied for this task.
+Ignore regions marked `IGNORE` in a page image; they were already processed, including the matching content in the PDF.
 {group_instructions}
 
 ## Available tools
@@ -266,7 +267,7 @@ def build_merge_plan_prompt(pages: list[int]) -> str:
 '''
     return f'''Task: determine only how the main tables on consecutive candidate pages should merge across pages.
 
-Low-resolution full-page images are attached in page-number order. Make a visual decision only. Do not call tools, extract data, or create or modify files.
+Contact sheets of low-resolution full-page images are attached in page-number order. Each thumbnail is labeled with its PDF page number. Make a visual decision only. Do not call tools, extract data, or create or modify files.
 
 1. Compare the title, column structure, width, and row flow of tables on adjacent pages.
 2. Return one continuous page group for each cross-page table.
