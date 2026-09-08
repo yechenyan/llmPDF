@@ -43,7 +43,15 @@ def merged_docling_options(override: dict[str, Any]) -> dict[str, Any]:
 def build_pdf_pipeline_options(
     override: dict[str, Any],
 ) -> tuple[object, dict[str, Any]]:
-    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.datamodel.pipeline_options import (
+        EasyOcrOptions,
+        OcrAutoOptions,
+        OcrMacOptions,
+        PdfPipelineOptions,
+        RapidOcrOptions,
+        TesseractCliOcrOptions,
+        TesseractOcrOptions,
+    )
 
     merged = merged_docling_options(override)
     unknown = sorted(set(merged) - set(PdfPipelineOptions.model_fields))
@@ -51,7 +59,34 @@ def build_pdf_pipeline_options(
         raise ValueError(
             f"Unknown Docling PDF pipeline option(s): {', '.join(unknown)}"
         )
+    ocr_options = merged.get("ocr_options")
+    ocr_engine = None
+    if isinstance(ocr_options, dict):
+        ocr_engine = ocr_options.get("engine")
+        if ocr_engine is not None:
+            merged = deepcopy(merged)
+            merged["ocr_options"] = {
+                key: value for key, value in ocr_options.items() if key != "engine"
+            }
+
     pipeline_options = PdfPipelineOptions(**merged)
+    if ocr_engine is not None:
+        engine_options = {
+            "auto": OcrAutoOptions,
+            "easyocr": EasyOcrOptions,
+            "ocrmac": OcrMacOptions,
+            "rapidocr": RapidOcrOptions,
+            "tesseract": TesseractOcrOptions,
+            "tesseract_cli": TesseractCliOcrOptions,
+        }
+        try:
+            option_class = engine_options[str(ocr_engine)]
+        except KeyError as error:
+            supported = ", ".join(sorted(engine_options))
+            raise ValueError(
+                f"Unsupported OCR engine {ocr_engine!r}; expected one of: {supported}"
+            ) from error
+        pipeline_options.ocr_options = option_class(**merged["ocr_options"])
     effective = pipeline_options.model_dump(mode="json")
     return pipeline_options, effective
 
