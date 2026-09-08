@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import os
+import re
 import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -413,6 +414,17 @@ class ReviewSource:
                 )
                 marker = f"<!-- table:{table_id} page:{table['page']} -->"
                 old_block = f"{marker}\n\n{old_markdown}"
+                if output.count(old_block) == 0:
+                    # Older source snapshots flattened cell breaks. Recognize
+                    # that format only for lookup; always write preserved breaks.
+                    legacy_rows = [
+                        [re.sub(r"\s*[\r\n]+\s*", " ", cell) for cell in row]
+                        for row in ai_rows
+                    ]
+                    old_markdown = rows_to_markdown(
+                        legacy_rows, table.get("name"), int(table.get("header_rows", 1))
+                    )
+                    old_block = f"{marker}\n\n{old_markdown}"
                 if output.count(old_block) != 1:
                     raise ValueError(
                         f"Cannot safely locate the source Markdown block for {table_id}"

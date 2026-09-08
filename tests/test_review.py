@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from llmpdf.io_utils import (
     read_json,
     relative_reference,
@@ -97,14 +99,42 @@ def test_markdown_table_rows_parses_docling_markdown() -> None:
     ]
 
 
-def test_rows_to_markdown_flattens_cell_line_breaks() -> None:
+def test_rows_to_markdown_preserves_cell_line_breaks() -> None:
     rendered = rows_to_markdown(
         [["Period", "Value"], ["2023 to 2028\n(t+5)", "12"]],
         None,
         1,
     )
-    assert "2023 to 2028 (t+5)" in rendered
-    assert "<br>" not in rendered
+    assert "2023 to 2028<br>(t+5)" in rendered
+    assert markdown_table_rows(rendered) == [
+        ["Period", "Value"],
+        ["2023 to 2028\n(t+5)", "12"],
+    ]
+
+
+@pytest.mark.parametrize("source_cell", ["first second", "first<br>second"])
+def test_review_publish_preserves_breaks_from_current_and_legacy_sources(
+    tmp_path: Path, source_cell: str
+) -> None:
+    root = make_result(tmp_path)
+    output_path = root / "output.md"
+    original = output_path.read_text().replace("| 1 | 2 |", f"| {source_cell} | 2 |")
+    output_path.write_text(original)
+    csv_path = root / "assets" / "tables" / "table-0001.csv"
+    csv_path.write_text('A,B\n"first\nsecond",2\n')
+    source = ReviewSource(root=root, id="sample")
+
+    source.publish()
+    assert output_path.read_text() == original.replace(source_cell, "first<br>second")
+    assert source.source_output_path.read_text() == original
+    assert source.detail("table-0001")["applied_rows"][1][0] == "first\nsecond"
+
+    rows = [["A", "B"], ["104 Mio. €\n247 Mio. €", "x|y\n\nz"]]
+    source.save_draft("table-0001", {"status": "approved", "rows": rows})
+    source.publish()
+    assert markdown_table_rows(output_path.read_text()) == rows
+    assert source.detail("table-0001")["applied_rows"] == rows
+    assert source.source_output_path.read_text() == original
 
 
 def test_review_detail_and_publish_round_trip(tmp_path: Path) -> None:

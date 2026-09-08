@@ -28,7 +28,9 @@ def rows_to_markdown(rows: list[list[str]], title: str | None, header_rows: int)
     padded = [row + [""] * (width - len(row)) for row in rows]
 
     def clean(value: str) -> str:
-        return re.sub(r"\s*[\r\n]+\s*", " ", value).replace("|", "\\|")
+        # A literal newline would end the Markdown table row. Keep each cell
+        # line break, including consecutive breaks, as an inline break instead.
+        return re.sub(r"\r\n|\r|\n", "<br>", value).replace("|", "\\|")
 
     lines: list[str] = []
     if title:

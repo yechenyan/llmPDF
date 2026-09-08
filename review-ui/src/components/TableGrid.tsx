@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useI18n } from "../i18n";
 import type { Rows } from "../reviewTypes";
-import { cloneRows, columnLabel, countDifferences } from "../reviewUtils";
+import { cloneRows, columnLabel, countDifferences, repeatedCellToneMap } from "../reviewUtils";
 
 const AUTO_COLUMN_MIN_WIDTH = 72;
 const AUTO_COLUMN_MAX_WIDTH = 300;
@@ -56,37 +56,7 @@ export function TableGrid({ rows, comparisonRows, editable = false, onChange, co
   const width = Math.max(...rows.map((row) => row.length), 0);
   const manualDifferenceCount = comparisonRows ? countDifferences(comparisonRows, rows) : 0;
   const automaticColumnWidths = useMemo(() => preferredColumnWidths(rows, width), [rows, width]);
-  const repeatedCellTones = useMemo(() => {
-    const normalized = rows.map((row) => Array.from({ length: width }, (_, column) => (row[column] || "").trim()));
-    const visited = new Set<string>();
-    const tones = new Map<string, string>();
-    let groupIndex = 0;
-    for (let row = 0; row < normalized.length; row += 1) {
-      for (let column = 0; column < width; column += 1) {
-        const key = `${row}:${column}`;
-        const value = normalized[row][column];
-        if (!value || visited.has(key)) continue;
-        const group: Array<[number, number]> = [];
-        const queue: Array<[number, number]> = [[row, column]];
-        visited.add(key);
-        while (queue.length) {
-          const [currentRow, currentColumn] = queue.shift()!;
-          group.push([currentRow, currentColumn]);
-          for (const [nextRow, nextColumn] of [[currentRow - 1, currentColumn], [currentRow + 1, currentColumn], [currentRow, currentColumn - 1], [currentRow, currentColumn + 1]]) {
-            const nextKey = `${nextRow}:${nextColumn}`;
-            if (nextRow < 0 || nextRow >= normalized.length || nextColumn < 0 || nextColumn >= width || visited.has(nextKey) || normalized[nextRow][nextColumn] !== value) continue;
-            visited.add(nextKey);
-            queue.push([nextRow, nextColumn]);
-          }
-        }
-        if (group.length < 2) continue;
-        const tone = `repeated-cell repeated-tone-${groupIndex % 4}`;
-        group.forEach(([groupRow, groupColumn]) => tones.set(`${groupRow}:${groupColumn}`, tone));
-        groupIndex += 1;
-      }
-    }
-    return tones;
-  }, [rows, width]);
+  const repeatedCellTones = useMemo(() => repeatedCellToneMap(rows), [rows]);
   const [columnWidthOverrides, setColumnWidthOverrides] = useState<Array<number | null>>([]);
   const columnWidths = Array.from({ length: width }, (_, index) => columnWidthOverrides[index] ?? automaticColumnWidths[index] ?? AUTO_COLUMN_MIN_WIDTH);
   const linkedPages = physicalPages?.length ? physicalPages : undefined;

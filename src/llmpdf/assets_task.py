@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import csv
-import re
 import shutil
 from pathlib import Path
 
@@ -9,6 +7,7 @@ import yaml
 
 from .io_utils import copy_file, read_json, relativize, sha256_file, write_json
 from .models import BBox, PipelineConfig, TaskResult
+from .review_tables import read_csv_rows, rows_to_markdown
 from .task import PipelineTask
 
 
@@ -21,28 +20,11 @@ def infer_header_rows(name: str | None) -> int:
 def csv_to_markdown(
     csv_path: Path, title: str | None, header_rows: int | None = None
 ) -> str:
-    with csv_path.open(encoding="utf-8-sig", newline="") as stream:
-        rows = list(csv.reader(stream))
+    rows = read_csv_rows(csv_path)
     if not rows:
         return ""
-    width = max(len(row) for row in rows)
-    rows = [row + [""] * (width - len(row)) for row in rows]
-
-    def clean(value: str) -> str:
-        return re.sub(r"\s*[\r\n]+\s*", " ", value).replace("|", "\\|")
-
-    lines = []
-    if title:
-        lines.extend([f"**{title.strip()}**", ""])
     header_rows = infer_header_rows(title) if header_rows is None else header_rows
-    header = rows[0] if header_rows else [""] * width
-    body = rows[1:] if header_rows else rows
-    lines.append("| " + " | ".join(clean(value) for value in header) + " |")
-    lines.append("| " + " | ".join("---" for _ in range(width)) + " |")
-    lines.extend(
-        "| " + " | ".join(clean(value) for value in row) + " |" for row in body
-    )
-    return "\n".join(lines).rstrip() + "\n"
+    return rows_to_markdown(rows, title, header_rows) + "\n"
 
 
 class CollectAssetsTask(PipelineTask):
@@ -51,7 +33,7 @@ class CollectAssetsTask(PipelineTask):
 
     def signature_payload(self, config: PipelineConfig) -> dict:
         value = super().signature_payload(config)
-        value["asset_logic_version"] = 6
+        value["asset_logic_version"] = 7
         summary = config.work_dir / "table-extraction" / "summary.json"
         if summary.is_file():
             value["extraction_summary_sha256"] = sha256_file(summary)

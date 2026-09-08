@@ -374,7 +374,7 @@ class MergeMarkdownTask(PipelineTask):
 
     def signature_payload(self, config: PipelineConfig) -> dict:
         value = super().signature_payload(config)
-        value["merge_logic_version"] = 13
+        value["merge_logic_version"] = 14
         value["retain_docling_tables"] = config.retain_docling_tables
         for name, path in {
             "blocks": config.work_dir / "docling" / "blocks.json",
