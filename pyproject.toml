@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmPDF"
-version = "0.7.0"
+version = "0.7.1"
 description = "Task-oriented PDF conversion and review toolkit"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
