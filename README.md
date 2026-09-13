@@ -101,6 +101,19 @@ First make sure the Claude Code CLI is installed, authenticated, and can make
 model calls. If it is available in your terminal, verify its location with
 `command -v claude` and its version with `claude --version`.
 
+`claude auth status` only reports cached login state; it can print
+`"loggedIn": true` even when the stored OAuth access token has expired, since
+it does not call the API to check. Confirm the CLI can actually make a model
+call before running a conversion:
+
+```bash
+claude -p "say hi in one word"
+```
+
+If that fails with `401` / `OAuth access token has expired`, run
+`claude auth login` to force a real re-authentication, then retry the command
+above until it returns text instead of an error.
+
 ```bash
 uv run llmpdf convert input.pdf \
   --output-dir results \
@@ -520,9 +533,13 @@ If the executable is outside `PATH`, pass `--pdftoppm /absolute/path/to/pdftoppm
 For Pi, confirm that the local Codex/Pi login is valid and that network access
 works. Use `--pi-executable` for a custom executable location.
 
-For Claude Code, confirm that the selected CLI can make model calls independently.
-Use `--claude-executable` if it is outside PATH. Authentication, account balance,
-and model access errors from Claude are reported as conversion failures.
+For Claude Code, confirm that the selected CLI can make model calls independently
+with `claude -p "say hi in one word"`; `claude auth status` alone can report
+`"loggedIn": true` with an expired access token, since it does not call the API.
+If the direct call fails with `401` / `OAuth access token has expired`, run
+`claude auth login` and retry. Use `--claude-executable` if `claude` is outside
+PATH. Authentication, account balance, and model access errors from Claude are
+reported as conversion failures.
 
 ### Conversion times out
 
