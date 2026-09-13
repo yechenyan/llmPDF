@@ -4,6 +4,8 @@ from copy import deepcopy
 from importlib.metadata import PackageNotFoundError, version
 import subprocess
 import sys
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from .io_utils import read_json, relativize, write_json
@@ -186,27 +188,27 @@ class DoclingTask(PipelineTask):
     ) -> TaskResult | None:
         control_dir = config.work_dir / "docling"
         control_dir.mkdir(parents=True, exist_ok=True)
-        request_path = control_dir / "worker-request.json"
         result_path = control_dir / "worker-result.json"
         result_path.unlink(missing_ok=True)
-        write_json(
-            request_path,
-            {
-                "pdf": str(config.pdf.resolve()),
-                "output_dir": str(config.output_dir.resolve()),
-                "selected_pages": list(config.selected_pages)
-                if config.selected_pages
-                else None,
-                "docling_options": docling_options,
-                "show_progress": config.show_progress,
-                "result_path": str(result_path.resolve()),
-            },
-        )
-        completed = subprocess.run(
-            [sys.executable, "-m", "llmpdf.docling_worker", str(request_path)],
-            check=False,
-        )
-        request_path.unlink(missing_ok=True)
+        with tempfile.TemporaryDirectory(prefix="llmpdf-docling-") as directory:
+            request_path = Path(directory) / "worker-request.json"
+            write_json(
+                request_path,
+                {
+                    "pdf": str(config.pdf.resolve()),
+                    "output_dir": str(config.output_dir.resolve()),
+                    "selected_pages": list(config.selected_pages)
+                    if config.selected_pages
+                    else None,
+                    "docling_options": docling_options,
+                    "show_progress": config.show_progress,
+                    "result_path": str(result_path.resolve()),
+                },
+            )
+            completed = subprocess.run(
+                [sys.executable, "-m", "llmpdf.docling_worker", str(request_path)],
+                check=False,
+            )
         if completed.returncode != 0 or not result_path.is_file():
             result_path.unlink(missing_ok=True)
             report_progress(

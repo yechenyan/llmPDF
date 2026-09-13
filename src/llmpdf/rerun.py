@@ -87,7 +87,7 @@ def _update_metrics_after_rerun(
     write_json(config.work_dir / "metrics.json", previous)
 
 
-def rerun_tables(result: Path) -> dict[str, Any]:
+def rerun_tables(result: Path, *, claude_executable: Path | None = None) -> dict[str, Any]:
     result_dir = result.expanduser().resolve()
     manifest_path = result_dir / "work" / "run-manifest.json"
     metadata_path = result_dir / "assets" / "metadata.json"
@@ -116,6 +116,9 @@ def rerun_tables(result: Path) -> dict[str, Any]:
             if settings.get("selected_pages") is not None
             else None
         ),
+        agent_backend=str(settings.get("agent_backend") or "pi"),
+        claude_executable=claude_executable.expanduser().resolve()
+        if claude_executable is not None else None,
         model=str(settings.get("model") or "gpt-5.6-sol"),
         thinking=str(settings.get("thinking") or "medium"),
         table_concurrency=int(settings.get("table_concurrency") or 5),

@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .io_utils import relative_reference, write_json
+from .io_utils import normalize_output_text, relative_reference, write_json
 from .models import PipelineConfig, TaskResult
 
 
@@ -194,6 +194,11 @@ class RunStatusTracker:
                 ),
             },
         }
+        if self.config.agent_backend == "claude-code":
+            payload["billing"]["note"] = (
+                "Claude Code token usage and cost are not collected; "
+                "zero values mean unreported usage."
+            )
         if self._error is not None:
             payload["error"] = self._error
         if self._state == "completed":
@@ -203,4 +208,5 @@ class RunStatusTracker:
             payload["manifest"] = (
                 "work/run-manifest.json" if manifest.is_file() else None
             )
+        payload = json.loads(normalize_output_text(json.dumps(payload, ensure_ascii=False), self.config))
         write_json(self.path, payload)

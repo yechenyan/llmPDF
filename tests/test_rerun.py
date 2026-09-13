@@ -1,14 +1,19 @@
 import gzip
 from pathlib import Path
 
+import pytest
+
 from llmpdf import rerun as rerun_module
 from llmpdf.io_utils import read_json, sha256_file, write_json
 from llmpdf.models import TaskResult
 
 
+@pytest.mark.parametrize("backend", ["pi", "claude-code"])
 def test_rerun_tables_restores_minimal_context_and_preserves_other_usage(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, backend: str
 ) -> None:
+    executable = tmp_path / "Claude Desktop" / "claude"
+    configuration = {"agent_backend": backend} if backend == "claude-code" else {}
     source = tmp_path / "source.pdf"
     source.write_bytes(b"%PDF-test")
     result = tmp_path / "result"
@@ -60,7 +65,7 @@ def test_rerun_tables_restores_minimal_context_and_preserves_other_usage(
                 "may_merge_with_previous": {},
             },
             "ignored_picture_blocks": [],
-            "configuration": {},
+            "configuration": configuration,
             "retained": {
                 "blocks": "work/run-blocks.json.gz",
                 "blocks_sha256": sha256_file(blocks),
@@ -68,7 +73,13 @@ def test_rerun_tables_restores_minimal_context_and_preserves_other_usage(
         },
     )
 
-    monkeypatch.setattr(rerun_module, "run_preflight", lambda *_args: None)
+    def check_preflight(config, _tasks):
+        assert config.agent_backend == backend
+        assert config.claude_executable == (
+            executable if backend == "claude-code" else None
+        )
+
+    monkeypatch.setattr(rerun_module, "run_preflight", check_preflight)
 
     def fake_extract(_self, config):
         write_json(
@@ -104,7 +115,9 @@ def test_rerun_tables_restores_minimal_context_and_preserves_other_usage(
     monkeypatch.setattr(rerun_module.ValidateTask, "run", fake_validate)
     monkeypatch.setattr(rerun_module, "minimize_successful_result", lambda _: None)
 
-    summary = rerun_module.rerun_tables(result)
+    summary = rerun_module.rerun_tables(
+        result, claude_executable=executable if backend == "claude-code" else None,
+    )
     assert summary["status"] == "completed"
     assert summary["validation"] == "passed"
     metrics = read_json(result / "work" / "metrics.json")

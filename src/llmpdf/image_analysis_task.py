@@ -4,6 +4,9 @@ import csv
 import json
 import re
 import subprocess
+
+from llmpdf.agent_runtime import run_agent
+from llmpdf.io_utils import normalize_output_text
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -737,8 +740,10 @@ def _run_image_pi(
             pi_environment(transport="auto") as environment,
             log.open("w", encoding="utf-8") as stdout,
         ):
-            completed = subprocess.run(
+            completed = run_agent(
                 command,
+                config=config,
+                runner=subprocess.run,
                 cwd=job_dir / "agent-output",
                 stdout=stdout,
                 stderr=subprocess.PIPE,
@@ -764,6 +769,7 @@ def _run_image_pi(
             stderr = f"{stderr}: {detail.strip()}"
     normalize_jsonl_paths(log, config.output_dir)
     usage, tool_calls, last_message, event_types = parse_log(log)
+    stderr = normalize_output_text(stderr, config)
     result = {
         "id": f"image-page-{int(read_json(job_dir / 'job.json')['page']):04d}",
         "elapsed_seconds": time.time() - started,
@@ -775,7 +781,8 @@ def _run_image_pi(
         "tool_calls": tool_calls,
         "event_types": event_types,
         "last_message": last_message,
-        "provider": "openai-codex",
+        "agent_backend": config.agent_backend,
+        "provider": "openai-codex" if config.agent_backend == "pi" else "claude-code",
         "model": config.image_model or config.model,
         "thinking": config.image_thinking or config.thinking,
         "transport": "auto",
@@ -785,6 +792,10 @@ def _run_image_pi(
         ),
         "job_dir": relative_reference(job_dir, config.output_dir),
     }
+    if config.agent_backend == "claude-code":
+        if result["model"] in {"gpt-5.6-sol", "gpt-5.6-terra"}:
+            result["model"] = "default"
+        result.update(thinking=None, transport=None, pi_package=None, pi_executable=None)
     metrics_name = (
         "metrics.json" if log.name == "pi.jsonl" else f"{log.stem}_metrics.json"
     )

@@ -77,15 +77,25 @@ def run_preflight(config: PipelineConfig, tasks: Iterable[PipelineTask]) -> None
             f"llmpdf-table executable is invalid: {config.table_executable}"
         )
 
+    if config.agent_backend not in {"pi", "claude-code"}:
+        raise ValueError(f"Unknown agent backend: {config.agent_backend}")
     needs_pi = bool(pending & {"03-detect-tables", "05-extract-tables"}) or (
         "07-analyze-images" in pending and config.analyze_images
     )
+    if needs_pi and config.agent_backend == "claude-code":
+        if _executable(config.claude_executable or "claude") is None:
+            raise FileNotFoundError("Claude Code is unavailable; install claude or provide claude_executable")
+        return
     if (
         needs_pi
         and config.pi_executable is not None
         and _executable(config.pi_executable) is None
     ):
         raise FileNotFoundError(f"Pi executable is invalid: {config.pi_executable}")
+    if needs_pi and config.agent_backend == "claude-code":
+        if _executable(config.claude_executable or "claude") is None:
+            raise FileNotFoundError("Claude Code is unavailable; install claude or provide claude_executable")
+        return
     if (
         needs_pi
         and config.pi_executable is None

@@ -30,26 +30,33 @@ def relative_reference(path: Path, root: Path) -> str:
     return Path(os.path.relpath(path.resolve(), start=root.resolve())).as_posix()
 
 
-def normalize_jsonl_paths(path: Path, artifact_root: Path) -> None:
-    """Rewrite host paths in a completed Pi JSONL log as relative references."""
-    if not path.is_file():
-        return
+def normalize_host_paths(content: str, artifact_root: Path, extra_paths: tuple[Path, ...] = ()) -> str:
+    """Replace runtime host paths with references relative to the artifact root."""
     artifact_root = artifact_root.resolve()
     absolute_roots = {
         artifact_root,
         Path.home().resolve(),
         Path(tempfile.gettempdir()).resolve(),
         Path(sys.prefix).resolve(),
+        *(path.expanduser().resolve() for path in extra_paths),
     }
+    absolute_roots = {root for root in absolute_roots if root != Path(root.anchor)}
     replacements = {
         str(root): relative_reference(root, artifact_root)
         for root in absolute_roots
     }
-    content = path.read_text(encoding="utf-8")
     for absolute, relative in sorted(
         replacements.items(), key=lambda item: len(item[0]), reverse=True
     ):
         content = content.replace(absolute, relative)
+    return content
+
+
+def normalize_jsonl_paths(path: Path, artifact_root: Path) -> None:
+    """Rewrite host paths in a completed Agent JSONL log as relative references."""
+    if not path.is_file():
+        return
+    content = normalize_host_paths(path.read_text(encoding="utf-8"), artifact_root)
     descriptor, temporary_name = tempfile.mkstemp(
         dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
     )

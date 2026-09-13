@@ -88,6 +88,8 @@ def run_bundled_table(
         PiConfig(
             model=config.model,
             thinking=config.thinking,
+            agent_backend=config.agent_backend,
+            claude_executable=config.claude_executable,
             pi_executable=config.pi_executable,
             transport="auto",
             timeout_seconds=config.agent_timeout_seconds,
@@ -185,6 +187,10 @@ def run_external_table(
             "--pdftoppm",
             config.pdftoppm,
         ]
+        if config.agent_backend != "pi":
+            command.extend(["--agent-backend", config.agent_backend])
+            if config.claude_executable:
+                command.extend(["--claude-executable", str(config.claude_executable)])
         if config.pi_executable:
             command.extend(["--pi-executable", str(config.pi_executable)])
         completed = subprocess.run(command, text=True, capture_output=True, check=False)

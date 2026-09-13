@@ -78,10 +78,12 @@ def add_runtime_arguments(parser: argparse.ArgumentParser) -> None:
         "--agent-timeout-seconds",
         type=float,
         default=1800.0,
-        help="Maximum duration of each Pi Agent call (default: 1800 seconds)",
+        help="Maximum duration of each Agent call (default: 1800 seconds)",
     )
     parser.add_argument("--confidence-threshold", type=float, default=0.35)
     parser.add_argument("--pdftoppm", default="pdftoppm")
+    parser.add_argument("--agent-backend", choices=("pi", "claude-code"), default="pi")
+    parser.add_argument("--claude-executable", type=Path)
     parser.add_argument("--pi-executable", type=Path)
     parser.add_argument(
         "--llmpdf-table-executable",
@@ -178,6 +180,9 @@ def config_from_args(args: argparse.Namespace) -> PipelineConfig:
         agent_timeout_seconds=args.agent_timeout_seconds,
         confidence_threshold=args.confidence_threshold,
         pdftoppm=args.pdftoppm,
+        agent_backend=args.agent_backend,
+        claude_executable=args.claude_executable.expanduser().resolve()
+        if args.claude_executable else None,
         pi_executable=args.pi_executable.resolve() if args.pi_executable else None,
         table_executable=args.table_executable.resolve()
         if args.table_executable
@@ -215,6 +220,8 @@ def options_from_args(args: argparse.Namespace) -> ConvertOptions:
         confidence_threshold=args.confidence_threshold,
         docling_options=load_docling_options(args.docling_options_file),
         pdftoppm=args.pdftoppm,
+        agent_backend=args.agent_backend,
+        claude_executable=args.claude_executable,
         pi_executable=args.pi_executable,
         table_executable=args.table_executable,
         keep_sessions=args.keep_sessions,
@@ -294,6 +301,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Regenerate tables from a successful minimal result directory",
     )
     rerun_parser.add_argument("result", type=Path, help="PDF result directory")
+    rerun_parser.add_argument("--claude-executable", type=Path)
     return parser
 
 
@@ -419,7 +427,7 @@ def main() -> None:
         from .rerun import rerun_tables
 
         try:
-            payload = rerun_tables(args.result)
+            payload = rerun_tables(args.result, claude_executable=args.claude_executable)
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         except (OSError, ValueError, TypeError, RuntimeError, KeyError) as error:
             print(

@@ -47,6 +47,8 @@ class ConvertOptions:
     image_max_patches: int = 10_000
     table_image_max_patches: int = 30_000
     pdftoppm: str | Path = "pdftoppm"
+    agent_backend: str = "pi"
+    claude_executable: PathInput | None = None
     pi_executable: PathInput | None = None
     table_executable: PathInput | None = None
     keep_sessions: bool = False
@@ -290,6 +292,8 @@ def build_pipeline_config(options: ConvertOptions) -> tuple[PipelineConfig, str,
             raise NotADirectoryError(f"output_root is not a directory: {output_root}")
         batch_id = options.batch_id or automatic_batch_id()
         _validate_batch_id(batch_id)
+        if options.agent_backend not in {"pi", "claude-code"}:
+            raise ValueError(f"Unknown agent backend: {options.agent_backend}")
         if not 1 <= options.agent_concurrency <= 5:
             raise ValueError("agent_concurrency must be between 1 and 5")
         if not 1 <= options.find_concurrency <= 5:
@@ -346,6 +350,8 @@ def build_pipeline_config(options: ConvertOptions) -> tuple[PipelineConfig, str,
             agent_timeout_seconds=options.agent_timeout_seconds,
             confidence_threshold=options.confidence_threshold,
             pdftoppm=str(options.pdftoppm),
+            agent_backend=options.agent_backend,
+            claude_executable=_explicit_executable(options.claude_executable, "Claude Code"),
             pi_executable=_explicit_executable(options.pi_executable, "Pi"),
             table_executable=_explicit_executable(
                 options.table_executable, "llmpdf-table"

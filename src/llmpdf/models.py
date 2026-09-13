@@ -90,6 +90,8 @@ class PipelineConfig:
     agent_timeout_seconds: float = 1800.0
     confidence_threshold: float = 0.35
     pdftoppm: str = "pdftoppm"
+    agent_backend: str = "pi"
+    claude_executable: Path | None = None
     pi_executable: Path | None = None
     table_executable: Path | None = None
     docling_options: dict[str, Any] = field(default_factory=dict)

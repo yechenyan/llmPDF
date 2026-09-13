@@ -8,6 +8,21 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from .table.io_utils import normalize_host_paths
+
+
+def normalize_output_text(content: str, config: Any) -> str:
+    """Keep runtime paths out of persisted messages and diagnostics."""
+    extra_paths = []
+    for name in ("pdf", "pi_executable", "claude_executable", "table_executable", "pdftoppm"):
+        value = getattr(config, name, None)
+        if value is not None:
+            path = Path(value).expanduser()
+            if path.is_absolute() or path.parent != Path("."):
+                extra_paths.append(path.resolve().parent)
+    root = getattr(config, "artifact_root", None) or getattr(config, "output_dir", None)
+    return normalize_host_paths(content, Path(root), tuple(extra_paths))
+
 
 def write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)

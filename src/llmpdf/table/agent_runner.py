@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+
+from llmpdf.agent_runtime import run_agent
+from llmpdf.table.io_utils import normalize_host_paths
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -18,6 +21,8 @@ from .pi_runtime import pi_environment as shared_pi_environment
 class PiConfig:
     model: str = "gpt-5.6-sol"
     thinking: str = "medium"
+    agent_backend: str = "pi"
+    claude_executable: Path | None = None
     pi_executable: Path | None = None
     agent_dir: Path | None = None
     transport: str = "auto"
@@ -144,8 +149,10 @@ def run_pi(
                 value for value in (package_root, existing_python_path) if value
             )
             with log.open("w", encoding="utf-8") as stdout:
-                completed = subprocess.run(
+                completed = run_agent(
                     command,
+                    config=config,
+                    runner=subprocess.run,
                     cwd=working_dir,
                     stdout=stdout,
                     stderr=subprocess.PIPE,
@@ -175,6 +182,7 @@ def run_pi(
     normalize_jsonl_paths(log, artifact_root)
     elapsed = time.time() - started
     usage, tool_calls, last_message, event_types = parse_log(log)
+    stderr = normalize_host_paths(stderr, artifact_root)
     (job_dir / "last_message.md").write_text(last_message + "\n", encoding="utf-8")
     result = {
         "id": manifest["id"],
@@ -188,7 +196,8 @@ def run_pi(
         "tool_calls": tool_calls,
         "event_types": event_types,
         "last_message": last_message,
-        "provider": "openai-codex",
+        "agent_backend": config.agent_backend,
+        "provider": "openai-codex" if config.agent_backend == "pi" else "claude-code",
         "model": config.model,
         "thinking": config.thinking,
         "transport": config.transport,
@@ -200,6 +209,10 @@ def run_pi(
         ),
         "job_dir": relative_reference(job_dir, artifact_root),
     }
+    if config.agent_backend == "claude-code":
+        if result["model"] in {"gpt-5.6-sol", "gpt-5.6-terra"}:
+            result["model"] = "default"
+        result.update(thinking=None, transport=None, pi_package=None, pi_executable=None)
     metrics_name = (
         "metrics.json" if log.name == "pi.jsonl" else f"{log.stem}_metrics.json"
     )

@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .io_utils import read_json, relative_reference, sha256_file, write_json
+from .io_utils import normalize_output_text, read_json, relative_reference, sha256_file, write_json
 from .models import PipelineConfig, TaskResult
 
 
@@ -56,7 +56,10 @@ def _preserve_table_code(config: PipelineConfig) -> Path:
             )
         destination = target_root / table_id / "extract.py"
         destination.parent.mkdir(parents=True)
-        shutil.copy2(source, destination)
+        destination.write_text(
+            normalize_output_text(source.read_text(encoding="utf-8"), config),
+            encoding="utf-8",
+        )
         records.append(
             {
                 "id": table_id,
@@ -123,6 +126,7 @@ def build_run_manifest(config: PipelineConfig) -> dict[str, Any]:
             "selected_pages": list(config.selected_pages)
             if config.selected_pages is not None
             else None,
+            "agent_backend": config.agent_backend,
             "model": config.model,
             "thinking": config.thinking,
             "agent_concurrency": config.agent_concurrency,
@@ -133,7 +137,7 @@ def build_run_manifest(config: PipelineConfig) -> dict[str, Any]:
             "image_max_patches": config.image_max_patches,
             "table_image_max_patches": config.table_image_max_patches,
             "agent_timeout_seconds": config.agent_timeout_seconds,
-            "pdftoppm": config.pdftoppm,
+            "pdftoppm": Path(config.pdftoppm).name,
             "retain_docling_tables": config.retain_docling_tables,
         },
         "retained": {

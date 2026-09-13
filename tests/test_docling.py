@@ -118,6 +118,7 @@ def test_docling_failure_retries_once_with_single_thread(
 
     def fake_run(command, check):
         assert check is False
+        assert not Path(command[-1]).is_relative_to(config.output_dir)
         request = read_json(Path(command[-1]))
         requests.append(request)
         if len(requests) == 1:

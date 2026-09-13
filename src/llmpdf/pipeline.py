@@ -18,6 +18,7 @@ from .run_status import RunStatusTracker
 from .screenshots_task import ScreenshotsTask
 from .task import PipelineTask
 from .validate_task import ValidateTask
+from .table.io_utils import normalize_jsonl_paths
 
 TASKS: tuple[PipelineTask, ...] = (
     DoclingTask(),
@@ -127,6 +128,8 @@ def run_tasks(
         tracker.fail(error)
         raise
     finally:
+        for session in config.work_dir.glob("**/*session*.jsonl"):
+            normalize_jsonl_paths(session, config.output_dir)
         config.agent_executor = None
         config.queue_images_with_tables = False
         config.prepared_image_jobs = None

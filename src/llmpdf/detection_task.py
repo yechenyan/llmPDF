@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+
+from llmpdf.agent_runtime import run_agent
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -283,8 +285,10 @@ class DetectTablesTask(PipelineTask):
                     pi_environment(transport="auto") as environment,
                     log.open("w", encoding="utf-8") as stdout,
                 ):
-                    completed = subprocess.run(
+                    completed = run_agent(
                         command,
+                        config=config,
+                        runner=subprocess.run,
                         cwd=batch_dir,
                         stdout=stdout,
                         stderr=subprocess.PIPE,
@@ -364,6 +368,8 @@ class DetectTablesTask(PipelineTask):
             pi_config = PiConfig(
                 model=config.model,
                 thinking=config.thinking,
+                agent_backend=config.agent_backend,
+                claude_executable=config.claude_executable,
                 pi_executable=config.pi_executable,
                 transport="auto",
                 timeout_seconds=config.agent_timeout_seconds,

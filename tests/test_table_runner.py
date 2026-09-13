@@ -61,6 +61,7 @@ class RunnerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             wrapper = Path(directory) / "python"
             write_python_wrapper(wrapper, Path(sys.executable))
+            self.assertIn('exec "$(dirname "$0")"/..', wrapper.read_text())
             completed = subprocess.run(
                 [str(wrapper), "-c", "import sys; print(sys.prefix)"],
                 check=True,

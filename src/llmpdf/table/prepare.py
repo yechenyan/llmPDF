@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 import shlex
 import subprocess
 import sys
@@ -22,8 +23,9 @@ IMAGE_PATCH_SIZE = 32
 
 def write_python_wrapper(path: Path, python_executable: Path) -> None:
     path.unlink(missing_ok=True)
+    relative_python = os.path.relpath(python_executable.absolute(), path.parent.resolve())
     path.write_text(
-        f"#!/bin/sh\nexec {shlex.quote(str(python_executable.absolute()))} \"$@\"\n",
+        f'#!/bin/sh\nexec "$(dirname "$0")"/{shlex.quote(relative_python)} "$@"\n',
         encoding="utf-8",
     )
     path.chmod(0o755)

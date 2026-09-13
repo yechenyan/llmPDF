@@ -208,9 +208,8 @@ body.resizing-column, body.resizing-column * { cursor: col-resize !important; us
 .data-grid td.repeated-tone-1, .data-grid .header-row td.repeated-tone-1 { background: var(--repeated-tone-1); }
 .data-grid td.repeated-tone-2, .data-grid .header-row td.repeated-tone-2 { background: var(--repeated-tone-2); }
 .data-grid td.repeated-tone-3, .data-grid .header-row td.repeated-tone-3 { background: var(--repeated-tone-3); }
-.data-grid td.manually-changed { background: #fff0d8; box-shadow: inset 0 0 0 1px #e6a24d; }
-.data-grid .header-row td.manually-changed { background: #ffe6bd; }
-.data-grid td.manually-changed:focus-within { box-shadow: inset 0 0 0 2px #d77a13; }
+.data-grid td.manually-changed { box-shadow: inset 0 0 0 2px #d32f2f; }
+.data-grid td.manually-changed:focus-within { box-shadow: inset 0 0 0 3px #d32f2f; }
 .diff-view { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .diff-summary { margin-bottom: 8px; color: var(--muted); font-size: 12px; }
 .diff-view .table-scroll { flex: 1; }

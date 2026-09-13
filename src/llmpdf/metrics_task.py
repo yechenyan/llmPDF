@@ -218,6 +218,12 @@ class MetricsTask(PipelineTask):
                 "note": "This run used Codex sign-in rather than an OpenAI API key. Actual included-plan or purchased-credit consumption must be read from the Codex Usage dashboard.",
             },
         }
+        if config.agent_backend == "claude-code":
+            report["tokens"]["note"] = "Claude Code token usage is not collected; zero values mean unreported usage."
+            report["billing"].update({
+                "provider": "claude-code", "api": None, "billing_mode": None,
+                "note": "Claude Code cost is not collected; zero values are not an actual charge.",
+            })
         scheduler = getattr(config, "agent_executor", None)
         snapshot = getattr(scheduler, "snapshot", None)
         if snapshot is not None:

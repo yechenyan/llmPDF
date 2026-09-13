@@ -9,8 +9,9 @@ Use `llmpdf convert` for normal operation. One command runs the complete convers
 - Python 3.11–3.14
 - [uv](https://docs.astral.sh/uv/)
 - Poppler's `pdftoppm`
-- Node.js 20.6+
-- A working Codex/Pi login and network connection
+- Node.js 20.6+ when using the default Pi backend
+- A working Codex/Pi login, or an installed and authenticated Claude Code CLI
+- A network connection
 
 Install Poppler on macOS with Homebrew:
 
@@ -87,6 +88,91 @@ Docling runs in an isolated child process. If that process fails during PDF pars
 
 All Agent work uses one dynamic scheduler with at most five workers. Whenever a worker becomes free, it selects the first ready task type in this order: Find, cross-page table, ordinary table, image. Completed Find batches can release bounded table groups before the remaining Find batches finish. Tasks with unresolved neighboring-page dependencies remain blocked rather than being extracted prematurely.
 
+## Agent backend: Pi and Claude Code
+
+Pi is the default backend. Set `--agent-backend claude-code` to use Claude Code
+for every Agent task: Find page detection, ordinary and cross-page table
+extraction, and image/chart analysis. The PDF conversion pipeline, shared
+concurrency limits, output validation, and failure recovery work with both backends.
+
+### Use Claude Code
+
+First make sure the Claude Code CLI is installed, authenticated, and can make
+model calls. If it is available in your terminal, verify its location with
+`command -v claude` and its version with `claude --version`.
+
+```bash
+uv run llmpdf convert input.pdf \
+  --output-dir results \
+  --agent-backend claude-code
+```
+
+If `claude` is outside PATH, pass `--claude-executable`. This also works with
+Claude Code bundled inside the Claude desktop application; point to its CLI
+executable, rather than the desktop application itself. Quote paths containing
+spaces. Relative executable paths are resolved before the job changes directories.
+
+```bash
+uv run llmpdf convert input.pdf \
+  --output-dir results \
+  --agent-backend claude-code \
+  --claude-executable "/path/to/Claude Code/claude"
+```
+
+The existing Pi model defaults are ignored on Claude Code, letting Claude choose
+its default model. To choose models explicitly, use a Claude alias or full model ID:
+
+```bash
+uv run llmpdf convert input.pdf \
+  --output-dir results \
+  --agent-backend claude-code \
+  --model sonnet \
+  --image-model sonnet
+```
+
+The same backend and executable options are available in `llmpdf-table` and
+`run-all`. Forward them to directory conversions after `--`:
+
+```bash
+uv run llmpdf convert-dir pdf-root --jobs 2 -- --agent-backend claude-code
+```
+
+### Python SDK
+
+```python
+from llmpdf import ConvertOptions, convert
+
+result = convert(ConvertOptions(
+    pdf="input.pdf",
+    output_root="results",
+    agent_backend="claude-code",
+    # claude_executable="/path/to/claude",  # Optional when claude is in PATH.
+))
+```
+
+### Regenerate tables
+
+Table regeneration retains the selected backend. Executable locations are
+runtime settings and are not stored in the run manifest or other configuration
+artifacts. If Claude is outside PATH, supply its location again when regenerating:
+
+```bash
+uv run llmpdf rerun-tables results/batch/input \
+  --claude-executable "/path/to/Claude Code/claude"
+```
+
+### Compatibility details
+
+- Thinking and transport settings are Pi-only and are ignored by Claude Code.
+- Claude token and cost accounting is not collected. Existing usage fields remain
+  zero, meaning **unreported usage**, not free model calls.
+- Images are passed directly as image content. Table jobs can read/write files
+  and execute commands. Failed calls and invalid outputs fail conversion normally.
+- When work is retained, Claude responses are saved beside the compatible Agent
+  logs, with runtime host paths converted to relative references.
+- `--keep-sessions` enables Claude's own session persistence. Those sessions are
+  managed by Claude Code, separately from llmPDF's retained Pi session files.
+
 ## `convert` parameters
 
 Syntax:
@@ -139,6 +225,8 @@ When an image is a readable chart, the tool attempts to produce structured table
 | --- | --- | --- |
 | `--agent-timeout-seconds N` | `1800` | Timeout for each model call, in seconds. |
 | `--pdftoppm PATH` | `pdftoppm` | Command name or executable path for `pdftoppm`. |
+| `--agent-backend BACKEND` | `pi` | Agent runtime for all task types: `pi` or `claude-code`. |
+| `--claude-executable PATH` | `claude` in PATH | Claude Code CLI location; used only with `claude-code`. |
 | `--pi-executable PATH` | Auto-detected | Explicit Pi executable path. Normally unnecessary. |
 | `--docling-options-file PATH` | None | JSON file containing additional document-analysis options. |
 | `--keep-sessions` | Disabled | Keep model session files for troubleshooting. |
@@ -429,7 +517,12 @@ If the executable is outside `PATH`, pass `--pdftoppm /absolute/path/to/pdftoppm
 
 ### Model authentication fails
 
-Confirm that the local Codex/Pi login is valid and that network access works. Use `--pi-executable` when a custom executable path is required.
+For Pi, confirm that the local Codex/Pi login is valid and that network access
+works. Use `--pi-executable` for a custom executable location.
+
+For Claude Code, confirm that the selected CLI can make model calls independently.
+Use `--claude-executable` if it is outside PATH. Authentication, account balance,
+and model access errors from Claude are reported as conversion failures.
 
 ### Conversion times out
 

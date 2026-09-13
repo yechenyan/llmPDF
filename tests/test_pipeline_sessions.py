@@ -57,6 +57,25 @@ def test_run_all_keeps_sessions_when_requested(tmp_path: Path, monkeypatch) -> N
     assert len(list(config.work_dir.glob("**/*session*.jsonl"))) == 1
 
 
+def test_retained_sessions_use_relative_paths(tmp_path: Path, monkeypatch) -> None:
+    class SessionTask(FakeTask):
+        def execute(self, config):
+            result = super().execute(config)
+            session = config.work_dir / "nested" / "pi-session.jsonl"
+            session.write_text('{"cwd":"' + str(config.output_dir) + '"}\n')
+            return result
+
+    config = PipelineConfig(
+        pdf=tmp_path / "input.pdf", output_dir=tmp_path / "out", keep_sessions=True,
+    )
+    config.pdf.write_bytes(b"%PDF-test")
+    monkeypatch.setattr(pipeline, "TASKS", (SessionTask(),))
+    pipeline.run_all(config)
+    session = config.work_dir / "nested" / "pi-session.jsonl"
+    assert str(config.output_dir) not in session.read_text()
+    assert read_json(session)["cwd"] == "."
+
+
 def test_run_tasks_reuses_one_agent_queue_across_stages(tmp_path: Path) -> None:
     config = PipelineConfig(pdf=tmp_path / "input.pdf", output_dir=tmp_path / "out")
     config.pdf.write_bytes(b"%PDF-test")
@@ -87,3 +106,4 @@ def test_run_tasks_records_preflight_failure(tmp_path: Path) -> None:
     status = read_json(config.work_dir / "status.json")
     assert status["status"] == "failed"
     assert status["error"]["type"] == "FileNotFoundError"
+    assert str(tmp_path) not in config.work_dir.joinpath("status.json").read_text()

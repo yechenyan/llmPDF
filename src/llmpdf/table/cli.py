@@ -31,6 +31,8 @@ def add_prepare_options(parser: argparse.ArgumentParser) -> None:
 def add_pi_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--model", default="gpt-5.6-sol")
     parser.add_argument("--thinking", default="medium")
+    parser.add_argument("--agent-backend", choices=("pi", "claude-code"), default="pi")
+    parser.add_argument("--claude-executable", type=Path)
     parser.add_argument("--pi-executable", type=Path)
     parser.add_argument("--agent-dir", type=Path)
     parser.add_argument("--transport", choices=("sse", "auto", "websocket"), default="auto")
@@ -44,6 +46,9 @@ def pi_config(args: argparse.Namespace) -> PiConfig:
     return PiConfig(
         model=args.model,
         thinking=args.thinking,
+        agent_backend=args.agent_backend,
+        claude_executable=args.claude_executable.expanduser().resolve()
+        if args.claude_executable else None,
         pi_executable=args.pi_executable.resolve() if args.pi_executable else None,
         agent_dir=args.agent_dir.resolve() if args.agent_dir else None,
         transport=args.transport,

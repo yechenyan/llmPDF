@@ -117,3 +117,21 @@ def test_minimal_retention_never_runs_after_failed_validation(tmp_path: Path) ->
     )
     assert minimize_successful_result(config) is None
     assert (config.work_dir / "table-extraction").is_dir()
+
+
+def test_minimal_retention_omits_runtime_executable_paths(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    config = make_successful_result(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    config.agent_backend = "claude-code"
+    config.claude_executable = Path("Claude Desktop/claude")
+    config.pdftoppm = str(tmp_path / "poppler" / "pdftoppm")
+
+    minimize_successful_result(config)
+
+    configuration = read_json(config.work_dir / "run-manifest.json")["configuration"]
+    assert configuration["agent_backend"] == "claude-code"
+    assert "claude_executable" not in configuration
+    assert configuration["pdftoppm"] == "pdftoppm"
+    assert str(tmp_path) not in (config.work_dir / "run-manifest.json").read_text()

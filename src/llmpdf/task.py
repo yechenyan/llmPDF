@@ -9,6 +9,7 @@ from typing import Any
 from . import __version__
 from .io_utils import (
     read_json,
+    normalize_output_text,
     relative_reference,
     sha256_file,
     sha256_json,
@@ -33,6 +34,9 @@ class PipelineTask(ABC):
             if config.selected_pages
             else None,
             "task": self.name,
+            **({"agent_backend": config.agent_backend} if config.agent_backend != "pi" and self.name in {
+                "03-detect-tables", "05-extract-tables", "07-analyze-images", "10-metrics"
+            } else {}),
         }
 
     def signature(self, config: PipelineConfig) -> str:
@@ -93,7 +97,7 @@ class PipelineTask(ABC):
                     "started_at": started_at,
                     "completed_at": datetime.now(timezone.utc).isoformat(),
                     "elapsed_seconds": time.time() - started,
-                    "error": f"{type(exc).__name__}: {exc}",
+                    "error": normalize_output_text(f"{type(exc).__name__}: {exc}", config),
                 },
             )
             raise
