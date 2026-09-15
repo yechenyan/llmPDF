@@ -74,6 +74,7 @@ export interface Detail {
     lineage?: { action: string; docling_table_ids: string[] };
   };
   ai_rows: Rows;
+  original_rows?: Rows;
   applied_rows: Rows;
   docling_fragments: Fragment[];
   docling_rows: Rows;

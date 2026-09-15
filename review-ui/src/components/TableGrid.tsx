@@ -48,13 +48,33 @@ interface TableGridProps {
   onPhysicalPage?: (page: number) => void;
 }
 
+interface CellPosition {
+  row: number;
+  column: number;
+}
+
 export function TableGrid({ rows, comparisonRows, editable = false, onChange, columnWidthKey, physicalPages, pageWeights, activePhysicalPage, onPhysicalPage }: TableGridProps) {
   const { t } = useI18n();
   const pageSize = 80;
   const [localPage, setLocalPage] = useState(0);
   const [gridSelection, setGridSelection] = useState<{ kind: "row" | "column"; index: number }>();
+  const [manualDifferenceCursor, setManualDifferenceCursor] = useState(-1);
+  const [manualDifferenceTarget, setManualDifferenceTarget] = useState<(CellPosition & { request: number })>();
   const width = Math.max(...rows.map((row) => row.length), 0);
   const manualDifferenceCount = comparisonRows ? countDifferences(comparisonRows, rows) : 0;
+  const manualDifferences = useMemo<CellPosition[]>(() => {
+    if (!comparisonRows) return [];
+    const rowCount = Math.max(rows.length, comparisonRows.length);
+    const comparisonWidth = Math.max(...comparisonRows.map((row) => row.length), 0);
+    const differenceWidth = Math.max(width, comparisonWidth);
+    const differences: CellPosition[] = [];
+    for (let row = 0; row < rowCount; row += 1) {
+      for (let column = 0; column < differenceWidth; column += 1) {
+        if ((rows[row]?.[column] || "") !== (comparisonRows[row]?.[column] || "")) differences.push({ row, column });
+      }
+    }
+    return differences;
+  }, [comparisonRows, rows, width]);
   const automaticColumnWidths = useMemo(() => preferredColumnWidths(rows, width), [rows, width]);
   const repeatedCellTones = useMemo(() => repeatedCellToneMap(rows), [rows]);
   const [columnWidthOverrides, setColumnWidthOverrides] = useState<Array<number | null>>([]);
@@ -78,6 +98,14 @@ export function TableGrid({ rows, comparisonRows, editable = false, onChange, co
   useEffect(() => setLocalPage(0), [rows.length]);
   useEffect(() => setGridSelection(undefined), [rows.length, width]);
   useEffect(() => {
+    setManualDifferenceCursor(-1);
+    setManualDifferenceTarget(undefined);
+  }, [columnWidthKey]);
+  useEffect(() => {
+    if (manualDifferenceCursor < manualDifferences.length) return;
+    setManualDifferenceCursor(manualDifferences.length ? manualDifferences.length - 1 : -1);
+  }, [manualDifferenceCursor, manualDifferences.length]);
+  useEffect(() => {
     let stored: Array<number | null> = [];
     if (columnWidthKey) {
       try {
@@ -95,6 +123,42 @@ export function TableGrid({ rows, comparisonRows, editable = false, onChange, co
   const pageEnd = rowBounds?.[page + 1] ?? (page + 1) * pageSize;
   const visible = rows.slice(pageStart, pageEnd);
   const changePage = (nextPage: number) => linkedPages ? onPhysicalPage?.(linkedPages[nextPage]) : setLocalPage(nextPage);
+  const pageForRow = (row: number) => {
+    if (rowBounds) {
+      const boundedRow = Math.min(Math.max(row, 0), Math.max(rows.length - 1, 0));
+      return Math.max(0, Math.min(pageCount - 1, rowBounds.findIndex((bound, index) => index < rowBounds.length - 1 && boundedRow >= bound && boundedRow < rowBounds[index + 1])));
+    }
+    return Math.max(0, Math.min(pageCount - 1, Math.floor(row / pageSize)));
+  };
+  const jumpToManualDifference = (direction: -1 | 1) => {
+    if (!manualDifferences.length || !rows.length || !width) return;
+    const nextCursor = manualDifferenceCursor < 0
+      ? direction > 0 ? 0 : manualDifferences.length - 1
+      : (manualDifferenceCursor + direction + manualDifferences.length) % manualDifferences.length;
+    const difference = manualDifferences[nextCursor];
+    const target = {
+      row: Math.min(difference.row, rows.length - 1),
+      column: Math.min(difference.column, width - 1),
+      request: Date.now(),
+    };
+    setManualDifferenceCursor(nextCursor);
+    setManualDifferenceTarget(target);
+    const targetPage = pageForRow(target.row);
+    if (targetPage !== page) changePage(targetPage);
+  };
+  useEffect(() => {
+    if (!manualDifferenceTarget || manualDifferenceTarget.row < pageStart || manualDifferenceTarget.row >= pageEnd) return;
+    const selector = `[data-row-index="${manualDifferenceTarget.row}"][data-column-index="${manualDifferenceTarget.column}"]`;
+    const cell = document.querySelector<HTMLTableCellElement>(selector);
+    if (!cell) return;
+    cell.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    cell.querySelector<HTMLTextAreaElement>("textarea")?.focus({ preventScroll: true });
+    cell.classList.remove("manual-change-target");
+    void cell.offsetWidth;
+    cell.classList.add("manual-change-target");
+    const timer = window.setTimeout(() => cell.classList.remove("manual-change-target"), 1200);
+    return () => window.clearTimeout(timer);
+  }, [manualDifferenceTarget, pageEnd, pageStart]);
   const update = (rowIndex: number, column: number, value: string) => {
     const copy = cloneRows(rows);
     copy[rowIndex][column] = value;
@@ -142,6 +206,7 @@ export function TableGrid({ rows, comparisonRows, editable = false, onChange, co
     <div className="grid-meta"><span>{t("dimensions", { rows: rows.length, columns: width })}{comparisonRows && manualDifferenceCount ? ` · ${t("manualChanges", { count: manualDifferenceCount })}` : ""}</span><div className="grid-controls">
       {editable && gridSelection?.kind === "row" ? <div className="selection-tools"><b>{t("rowNumber", { number: gridSelection.index + 1 })}</b><button onClick={() => insertRow(gridSelection.index)}>{t("insertAbove")}</button><button onClick={() => insertRow(gridSelection.index + 1)}>{t("insertBelow")}</button><button className="danger" disabled={rows.length <= 1} onClick={() => removeRow(gridSelection.index)}>{t("deleteRow")}</button></div> : null}
       {editable && gridSelection?.kind === "column" ? <div className="selection-tools"><b>{t("columnNumber", { label: columnLabel(gridSelection.index) })}</b><button onClick={() => insertColumn(gridSelection.index)}>{t("insertLeft")}</button><button onClick={() => insertColumn(gridSelection.index + 1)}>{t("insertRight")}</button><button className="danger" disabled={width <= 1} onClick={() => removeColumn(gridSelection.index)}>{t("deleteColumn")}</button></div> : null}
+      {editable && comparisonRows ? <div className="manual-change-navigation"><button disabled={!manualDifferences.length} title={t("previousManualChange")} onClick={() => jumpToManualDifference(-1)}>{t("previousManualChange")}</button><span title={t("manualDifferenceTitle")}>{manualDifferences.length ? t("manualChangePosition", { current: manualDifferenceCursor + 1, count: manualDifferences.length }) : t("noManualChanges")}</span><button disabled={!manualDifferences.length} title={t("nextManualChange")} onClick={() => jumpToManualDifference(1)}>{t("nextManualChange")}</button></div> : null}
       {pageCount > 1 ? <><button disabled={page === 0} onClick={() => changePage(page - 1)}>{t("previousPage")}</button><span>P{linkedPages?.[page] ?? page + 1} · {page + 1}/{pageCount}</span><button disabled={page + 1 === pageCount} onClick={() => changePage(page + 1)}>{t("nextPage")}</button></> : null}
     </div></div>
     <div className="table-scroll"><table className="data-grid">
@@ -151,7 +216,7 @@ export function TableGrid({ rows, comparisonRows, editable = false, onChange, co
         return <tr key={rowIndex} className={rowIndex === 0 ? "header-row" : ""}><th className="row-number">{editable ? <button className={gridSelection?.kind === "row" && gridSelection.index === rowIndex ? "selected" : ""} title={t("selectRow", { number: rowIndex + 1 })} onClick={() => setGridSelection({ kind: "row", index: rowIndex })}>{rowIndex + 1}</button> : rowIndex + 1}</th>{Array.from({ length: width }, (_, column) => {
           const manuallyChanged = comparisonRows && (row[column] || "") !== (comparisonRows[rowIndex]?.[column] || "");
           const className = [repeatedCellTones.get(`${rowIndex}:${column}`) || "", manuallyChanged ? "manually-changed" : ""].filter(Boolean).join(" ");
-          return <td key={column} className={className} style={editable ? { width: columnWidths[column], minWidth: columnWidths[column], maxWidth: columnWidths[column] } : undefined}>{editable ? <AutoSizeTextarea value={row[column] || ""} onValueChange={(value) => update(rowIndex, column, value)} /> : <span>{row[column] || " "}</span>}</td>;
+          return <td key={column} data-row-index={rowIndex} data-column-index={column} className={className} style={editable ? { width: columnWidths[column], minWidth: columnWidths[column], maxWidth: columnWidths[column] } : undefined}>{editable ? <AutoSizeTextarea value={row[column] || ""} onValueChange={(value) => update(rowIndex, column, value)} /> : <span>{row[column] || " "}</span>}</td>;
         })}</tr>;
       })}</tbody>
     </table></div>
